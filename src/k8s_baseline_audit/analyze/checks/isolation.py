@@ -26,29 +26,46 @@ def _is_default_deny_ingress(policy: dict) -> bool:
     Severity.MEDIUM,
     "Namespace ohne Pod-Security-Admission-Label",
     "Namespace without Pod Security Admission label",
-    "Label pod-security.kubernetes.io/enforce (baseline oder restricted) setzen.",
-    "Set the label pod-security.kubernetes.io/enforce (baseline or restricted).",
+    "Label pod-security.kubernetes.io/enforce (baseline oder restricted) setzen. "
+    "Cluster-weite Standardwerte aus einer AdmissionConfiguration sind für dieses "
+    "Werkzeug nicht sichtbar.",
+    "Set the label pod-security.kubernetes.io/enforce (baseline or restricted). "
+    "Cluster-wide defaults from an AdmissionConfiguration are not visible to this "
+    "tool.",
 )
 def psa_labels_missing(ctx: CheckContext) -> list[Hit]:
+    system_ns = set(ctx.config.system_namespaces)
     hits = []
     for i, n in enumerate(ctx.items("namespaces")):
+        ns_name = (n.get("metadata") or {}).get("name")
+        if ns_name in system_ns:
+            continue
         labels = (n.get("metadata") or {}).get("labels") or {}
-        if PSA_ENFORCE not in labels:
+        enforce_value = labels.get(PSA_ENFORCE)
+        if enforce_value != "baseline" and enforce_value != "restricted":
             path = f"$.items[{i}].metadata.labels"
             hits.append(Hit(meta_ref("Namespace", n), ev("namespaces", path)))
     return hits
 
 
-@check("isolation.no_network_policy", ("namespaces", "networkpolicies", "pods"), Severity.MEDIUM,
-       "Namespace mit Pods, aber ohne NetworkPolicy", "Namespace with pods but no NetworkPolicy",
-       "Default-Deny-NetworkPolicy anlegen und benötigte Verbindungen explizit erlauben.",
-       "Create a default-deny NetworkPolicy and explicitly allow required connections.")
+@check(
+    "isolation.no_network_policy",
+    ("namespaces", "networkpolicies", "pods"),
+    Severity.MEDIUM,
+    "Namespace mit Pods, aber ohne NetworkPolicy",
+    "Namespace with pods but no NetworkPolicy",
+    "Default-Deny-NetworkPolicy anlegen und benötigte Verbindungen explizit erlauben.",
+    "Create a default-deny NetworkPolicy and explicitly allow required connections.",
+)
 def no_network_policy(ctx: CheckContext) -> list[Hit]:
+    system_ns = set(ctx.config.system_namespaces)
     with_pods = {_ns(p) for p in ctx.items("pods")}
     with_policy = {_ns(p) for p in ctx.items("networkpolicies")}
     hits = []
     for i, n in enumerate(ctx.items("namespaces")):
         name = (n.get("metadata") or {}).get("name")
+        if name in system_ns:
+            continue
         if name in with_pods and name not in with_policy:
             hits.append(Hit(meta_ref("Namespace", n), ev("namespaces", f"$.items[{i}]")))
     return hits
@@ -73,15 +90,43 @@ def no_default_deny(ctx: CheckContext) -> list[Hit]:
     ]
 
 
-@check("isolation.allow_all_policy", ("networkpolicies",), Severity.HIGH,
-       "NetworkPolicy erlaubt jeglichen eingehenden Verkehr", "NetworkPolicy allows all ingress",
-       "Leere Ingress-Regel ({}) durch konkrete from- und ports-Angaben ersetzen.",
-       "Replace the empty ingress rule ({}) with explicit from and ports entries.")
+def _is_allow_all_ingress_rule(rule: dict) -> bool:
+    """Check if a rule allows all ingress traffic."""
+    # Rule has no 'from' key or 'from' is empty/None
+    from_peers = rule.get("from")
+    if not from_peers:
+        return True
+
+    # Check each peer in 'from'
+    for peer in from_peers:
+        peer = peer or {}
+        # Check for 0.0.0.0/0 or ::/0 CIDR
+        ip_block = peer.get("ipBlock") or {}
+        cidr = ip_block.get("cidr")
+        if cidr in ("0.0.0.0/0", "::/0"):
+            return True
+
+        # Check for bare namespaceSelector (no podSelector key)
+        if "namespaceSelector" in peer and "podSelector" not in peer:
+            return True
+
+    return False
+
+
+@check(
+    "isolation.allow_all_policy",
+    ("networkpolicies",),
+    Severity.HIGH,
+    "NetworkPolicy erlaubt jeglichen eingehenden Verkehr",
+    "NetworkPolicy allows all ingress",
+    "Leere Ingress-Regel ({}) durch konkrete from- und ports-Angaben ersetzen.",
+    "Replace the empty ingress rule ({}) with explicit from and ports entries.",
+)
 def allow_all_policy(ctx: CheckContext) -> list[Hit]:
     hits = []
     for i, policy in enumerate(ctx.items("networkpolicies")):
         for k, rule in enumerate(spec_of(policy).get("ingress") or []):
-            if rule == {}:
+            if _is_allow_all_ingress_rule(rule):
                 path = f"$.items[{i}].spec.ingress[{k}]"
                 hits.append(
                     Hit(meta_ref("NetworkPolicy", policy), ev("networkpolicies", path))

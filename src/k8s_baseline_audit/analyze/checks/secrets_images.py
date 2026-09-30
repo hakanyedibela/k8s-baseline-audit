@@ -29,7 +29,7 @@ def split_image(image: str) -> tuple[str, str | None, str | None]:
         registry, path = "docker.io", image
     last = path.rsplit("/", 1)[-1]
     tag = last.split(":", 1)[1] if ":" in last else None
-    return registry, tag, digest
+    return registry.lower(), tag, digest
 
 
 def _image_hits(ctx: CheckContext, predicate) -> list[Hit]:
@@ -131,7 +131,7 @@ def no_digest(ctx: CheckContext) -> list[Hit]:
     "Mirror the image into an approved registry or deliberately extend the allowlist.",
 )
 def registry_not_allowed(ctx: CheckContext) -> list[Hit]:
-    allowed = set(ctx.config.registry_allowlist)
+    allowed = {reg.lower() for reg in ctx.config.registry_allowlist}
     if not allowed:
         raise ManualCheckNeeded("no registry allowlist configured (use --registry-allowlist)")
     return _image_hits(ctx, lambda image: split_image(image)[0] not in allowed)

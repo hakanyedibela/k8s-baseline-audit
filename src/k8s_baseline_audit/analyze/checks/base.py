@@ -29,6 +29,11 @@ class AnalyzerConfig:
         "ClusterRoleBinding/-/system:public-info-viewer",
         "RoleBinding/kube-public/kubeadm:bootstrap-signer-clusterinfo",
     )
+    system_namespaces: tuple[str, ...] = (
+        "kube-system",
+        "kube-public",
+        "kube-node-lease",
+    )
 
 
 @dataclass(frozen=True)

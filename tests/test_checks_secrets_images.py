@@ -16,6 +16,9 @@ from k8s_baseline_audit.collect.redact import REDACTED
         ("registry:5000/team/app:2", ("registry:5000", "2", None)),
         ("ghcr.io/org/app@sha256:abc", ("ghcr.io", None, "sha256:abc")),
         ("localhost/app:1", ("localhost", "1", None)),
+        ("localhost:5000/app", ("localhost:5000", None, None)),
+        ("app:1.0@sha256:abc", ("docker.io", "1.0", "sha256:abc")),
+        ("Registry.Example.com/app:1", ("registry.example.com", "1", None)),
     ],
 )
 def test_split_image(image, expected):
@@ -82,3 +85,20 @@ def test_registry_allowlist():
     assert [h.evidence.json_path for h in hits] == [
         "$.items[0].spec.containers[0].image"
     ]
+
+
+def test_registry_allowlist_case_insensitive():
+    """Test that registry comparison is case-insensitive."""
+    # Image with uppercase registry, allowlist with uppercase
+    pods = [
+        pod(
+            containers=[
+                container("mixed", "Registry.Example.com/app:1"),
+            ]
+        )
+    ]
+    c = ctx(
+        config(registry_allowlist=("Registry.Example.COM",)), pods=pods
+    )
+    hits = run_check("images.registry_not_allowed", c)
+    assert len(hits) == 0  # Should be allowed (case-insensitive)
