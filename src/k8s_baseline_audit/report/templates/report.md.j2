@@ -1,0 +1,123 @@
+{% set b = meta.bundle %}
+# {{ L.title }} – {{ b.cluster.get("context", "?") | md }}
+
+> {{ L.disclaimer }}
+
+| | |
+|---|---|
+| {{ L.cluster }} | {{ b.cluster.get("context", "?") | md }} ({{ b.cluster.get("server", "") | md }}) |
+| {{ L.collected }} | {{ b.created_at or "?" }} |
+| {{ L.bundle_hash }} | `{{ b.manifest_sha256 }}` |
+| {{ L.provenance }} | {% if b.provenance_verified %}{{ L.verified }}{% else %}{{ L.unverified }}{% endif %} |
+| {{ L.producer }} | {{ b.producer or "?" }} |
+| {{ L.framework }} | {{ meta.mapping.framework }} {{ meta.mapping.edition }}, {{ L.modules }} {{ meta.mapping.modules | join(", ") }} |
+| {{ L.tool }} | {{ meta.tool.name }} {{ meta.tool.version }} |
+| {{ L.scanners }} | {% for name, s in b.scanners | dictsort %}{{ name }}: {{ s.get("status") }}{% if s.get("version") %} ({{ s.get("version") | md }}){% endif %}{% if not loop.last %}, {% endif %}{% else %}{{ L.none }}{% endfor %} |
+
+## {{ L.s_summary }}
+
+{% if narrative %}
+_{{ L.ai_label }}_
+
+{{ narrative.summary }}
+{% else %}
+{{ L.no_summary }}
+{% endif %}
+
+## {{ L.s_matrix }}
+
+| {{ L.col_req }} | {{ L.col_level }} | {{ L.col_title }} | {{ L.col_status }} | {{ L.col_findings }} | {{ L.col_reasons }} |
+|---|---|---|---|---|---|
+{% for c in coverage %}
+{% set r = req(c.requirement_id) %}
+| {{ c.requirement_id }} | {{ L.level[r.level.value] }} | {{ r.title | attr(lang) | md }} | {{ L.status[c.status.value] }} | {{ c.finding_ids | length }} | {{ c.reasons | join("; ") | md }} |
+{% endfor %}
+
+## {{ L.s_findings }}
+{% for f in findings %}
+
+### {{ loop.index }}. {{ f.title | attr(lang) | md }}
+
+| | |
+|---|---|
+| ID | `{{ f.id }}` |
+| {{ L.check }} | `{{ f.check_id }}` |
+| {{ L.severity }} | {{ L.sev[f.severity.value] }}{% if f.severity_unmapped %} ({{ L.unrated }}){% endif %} |
+| {{ L.priority }} | {% if narrative and f.id in narrative.priorities %}{{ narrative.priorities[f.id].rank }} – {{ narrative.priorities[f.id].reason | md }} (_{{ L.ai_label }}_){% else %}–{% endif %} |
+| {{ L.requirements }} | {{ f.requirements | join(", ") if f.requirements else L.no_mapping }} |
+| {{ L.resources }} | {% for r in f.resources %}`{{ r.key() }}`{% if not loop.last %}, {% endif %}{% endfor %} |
+| {{ L.sources }} | {{ f.sources | map(attribute="value") | join(", ") }} |
+| {{ L.evidence }} | {% for e in f.evidence %}`{{ e.file }}` `{{ e.json_path | md }}`{% if not loop.last %}<br>{% endif %}{% endfor %} |
+
+**{{ L.fix }}:** {{ f.remediation | attr(lang) }}
+{% if narrative and f.id in narrative.fix_notes %}
+
+_{{ L.ai_label }}:_ {{ narrative.fix_notes[f.id] }}
+{% endif %}
+
+_{{ L.not_executed }}_
+{% else %}
+
+{{ L.no_findings }}
+{% endfor %}
+
+## {{ L.s_vulns }}
+
+{% if vulns %}
+| ID | {{ L.col_title }} | {{ L.col_severity }} | {{ L.col_resource }} |
+|---|---|---|---|
+{% for f in vulns %}
+| `{{ f.id }}` | {{ f.title | attr(lang) | md }} | {{ L.sev[f.severity.value] }} | `{{ f.resources[0].key() }}` |
+{% endfor %}
+{% else %}
+{{ L.no_vulns }}
+{% endif %}
+
+## {{ L.s_questions }}
+
+{% for c in coverage if c.status.value in ("manual_check_needed", "organizational", "partially_checked") %}
+{% set r = req(c.requirement_id) %}
+**{{ c.requirement_id }} – {{ r.title | attr(lang) }}**
+{% for q in r.questions %}
+- [ ] {{ q | attr(lang) }}
+{% endfor %}
+
+{% else %}
+{{ L.no_questions }}
+{% endfor %}
+
+## {{ L.s_appendix }}
+
+### {{ L.s_not_checked }}
+
+{% if skipped %}
+| {{ L.check }} | {{ L.col_status }} | {{ L.col_reasons }} |
+|---|---|---|
+{% for r in skipped %}
+| `{{ r.check_id }}` | {{ L.run_state[r.state] }} | {{ r.reason | md }} |
+{% endfor %}
+{% else %}
+{{ L.nothing_skipped }}
+{% endif %}
+
+### {{ L.s_preflight }}
+
+| {{ L.col_resource }} | {{ L.col_allowed }} |
+|---|---|
+{% for kind, allowed in preflight | dictsort %}
+| {{ kind }} | {{ L.yes if allowed else L.no }} |
+{% endfor %}
+
+### {{ L.s_exclusions }}
+
+{% for key, values in meta.config | dictsort if key != "as_of" %}
+- `{{ key }}`: {{ values | join(", ") if values else L.none }}
+{% endfor %}
+
+### {{ L.s_evidence }}
+
+| {{ L.col_file }} | SHA-256 |
+|---|---|
+{% for rel, digest in (manifest.get("files") or {}) | dictsort %}
+| `{{ rel }}` | `{{ digest }}` |
+{% endfor %}

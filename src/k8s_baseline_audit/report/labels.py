@@ -1,0 +1,77 @@
+# ruff: noqa: E501
+"""All fixed report wording, per language. The template contains no prose of its own."""
+
+LABELS: dict[str, dict] = {
+    "de": {
+        "title": "Kubernetes-Sicherheitsaudit",
+        "disclaimer": (
+            "Dieser Bericht ist keine Zertifizierung und keine Rechtsberatung. "
+            "„Keine Abweichung festgestellt“ bedeutet nur, dass die automatischen Prüfungen nichts gefunden haben."
+        ),
+        "cluster": "Cluster", "collected": "Erhebungszeitpunkt", "bundle_hash": "Bundle-Hash (SHA-256, manifest.json)",
+        "provenance": "Herkunft", "verified": "Hashes geprüft",
+        "unverified": "**Herkunft nicht verifiziert** (Bundle ohne Hashes)",
+        "producer": "Erzeugt durch", "framework": "Regelwerk", "modules": "Module", "tool": "Werkzeug",
+        "scanners": "Scanner", "none": "keine",
+        "s_summary": "1. Management-Zusammenfassung", "s_matrix": "2. Abdeckungsmatrix",
+        "s_findings": "3. Befunde nach Priorität", "s_vulns": "3a. Image-Schwachstellen",
+        "s_questions": "4. Fragen für manuelle und organisatorische Anforderungen", "s_appendix": "5. Anhang",
+        "s_not_checked": "5.1 Nicht geprüft", "s_preflight": "5.2 Berechtigungen bei der Erhebung",
+        "s_exclusions": "5.3 Konfigurierte Ausnahmen", "s_evidence": "5.4 Nachweisverzeichnis",
+        "ai_label": "KI-generiert, vom Auditor zu prüfen",
+        "no_summary": "Keine Management-Zusammenfassung erzeugt.",
+        "col_req": "Anforderung", "col_level": "Stufe", "col_title": "Titel", "col_status": "Status",
+        "col_findings": "Befunde", "col_reasons": "Begründung", "col_resource": "Ressource",
+        "col_allowed": "Erlaubt", "col_file": "Datei", "col_severity": "Schweregrad",
+        "severity": "Schweregrad", "priority": "Priorität", "requirements": "Anforderungen",
+        "resources": "Ressourcen", "sources": "Quellen", "evidence": "Nachweise", "fix": "Maßnahme",
+        "not_executed": "Die Befehle wurden nicht ausgeführt.", "unrated": "vom Scanner nicht eingestuft",
+        "no_mapping": "keine BSI-Zuordnung", "no_findings": "Keine Befunde.", "no_vulns": "Keine Image-Schwachstellen gemeldet.",
+        "no_questions": "Keine.", "nothing_skipped": "Alle Prüfungen wurden ausgeführt.",
+        "yes": "ja", "no": "nein", "check": "Prüfung",
+        "level": {"basic": "Basis", "standard": "Standard", "elevated": "Erhöht"},
+        "status": {
+            "no_deviation_found": "Keine Abweichung festgestellt", "deviation": "Abweichung",
+            "partially_checked": "Teilweise geprüft", "manual_check_needed": "Manuelle Prüfung nötig",
+            "organizational": "Organisatorisch", "not_checked": "Nicht geprüft",
+        },
+        "run_state": {"not_run": "nicht ausgeführt", "manual": "manuell zu prüfen"},
+        "sev": {"critical": "Kritisch", "high": "Hoch", "medium": "Mittel", "low": "Niedrig"},
+    },
+    "en": {
+        "title": "Kubernetes security audit",
+        "disclaimer": (
+            "This report is no certification and no legal advice. "
+            "\"No deviation found\" only means the automated checks found nothing."
+        ),
+        "cluster": "Cluster", "collected": "Collected at", "bundle_hash": "Bundle hash (SHA-256, manifest.json)",
+        "provenance": "Provenance", "verified": "hashes verified",
+        "unverified": "**provenance unverified** (bundle without hashes)",
+        "producer": "Produced by", "framework": "Framework", "modules": "modules", "tool": "Tool",
+        "scanners": "Scanners", "none": "none",
+        "s_summary": "1. Management summary", "s_matrix": "2. Coverage matrix",
+        "s_findings": "3. Findings by priority", "s_vulns": "3a. Image vulnerabilities",
+        "s_questions": "4. Questions for manual and organizational requirements", "s_appendix": "5. Appendix",
+        "s_not_checked": "5.1 Not checked", "s_preflight": "5.2 Permissions during collection",
+        "s_exclusions": "5.3 Configured exclusions", "s_evidence": "5.4 Evidence index",
+        "ai_label": "AI-generated, to be reviewed by the auditor",
+        "no_summary": "No management summary generated.",
+        "col_req": "Requirement", "col_level": "Level", "col_title": "Title", "col_status": "Status",
+        "col_findings": "Findings", "col_reasons": "Reasons", "col_resource": "Resource",
+        "col_allowed": "Allowed", "col_file": "File", "col_severity": "Severity",
+        "severity": "Severity", "priority": "Priority", "requirements": "Requirements",
+        "resources": "Resources", "sources": "Sources", "evidence": "Evidence", "fix": "Remediation",
+        "not_executed": "The commands were not executed.", "unrated": "not rated by the scanner",
+        "no_mapping": "no BSI mapping", "no_findings": "No findings.", "no_vulns": "No image vulnerabilities reported.",
+        "no_questions": "None.", "nothing_skipped": "All checks ran.",
+        "yes": "yes", "no": "no", "check": "Check",
+        "level": {"basic": "Basic", "standard": "Standard", "elevated": "Elevated"},
+        "status": {
+            "no_deviation_found": "No deviation found", "deviation": "Deviation",
+            "partially_checked": "Partially checked", "manual_check_needed": "Manual check needed",
+            "organizational": "Organizational", "not_checked": "Not checked",
+        },
+        "run_state": {"not_run": "not run", "manual": "manual check needed"},
+        "sev": {"critical": "Critical", "high": "High", "medium": "Medium", "low": "Low"},
+    },
+}
