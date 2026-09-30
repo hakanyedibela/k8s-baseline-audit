@@ -1,12 +1,15 @@
 import copy
 import json
 
+import pytest
+
 from k8s_baseline_audit.collect.redact import (
     CREDENTIAL_NAME,
     LAST_APPLIED,
     REDACTED,
     SECRET_TEMPLATE,
     parse_secret_rows,
+    redact_argv,
     redact_pod_list,
 )
 
@@ -53,18 +56,20 @@ def test_literal_env_values_are_redacted_everywhere():
     assert "valueFrom" in c["env"][2]
 
 
-def test_last_applied_annotation_is_stripped():
-    ann = redact_pod_list(_pods())["items"][0]["metadata"]["annotations"]
-    assert LAST_APPLIED not in ann
-    assert ann["keep"] == "me"
+def test_all_annotations_are_deleted():
+    result = redact_pod_list(_pods())
+    assert "annotations" not in result["items"][0]["metadata"]
 
 
-def test_secret_like_args_are_redacted_but_flag_name_kept():
+def test_secret_like_args_redacted_with_argv_rules():
+    """Args now follow redact_argv rules which are more sophisticated."""
     args = redact_pod_list(_pods())["items"][0]["spec"]["containers"][0]["args"]
+    # --db-password=LEAK becomes --db-password=<redacted>
     assert args == [f"--db-password={REDACTED}", "--port=8080"]
 
 
-def test_control_plane_flags_survive():
+def test_control_plane_flags_survive_with_safe_values():
+    """Flags with safe values (true/false, paths) survive unchanged."""
     doc = {
         "items": [
             {
@@ -78,6 +83,9 @@ def test_control_plane_flags_survive():
                                 "--anonymous-auth=false",
                                 "--encryption-provider-config=/etc/k/enc.yaml",
                                 "--audit-log-path=/var/log/audit.log",
+                                "--enable-bootstrap-token-auth=true",
+                                "--authentication-token-webhook=true",
+                                "--token-auth-file=/etc/k/tokens.csv",
                             ],
                         }
                     ]
@@ -85,7 +93,13 @@ def test_control_plane_flags_survive():
             }
         ]
     }
-    assert redact_pod_list(doc) == doc
+    result = redact_pod_list(doc)
+    cmd = result["items"][0]["spec"]["containers"][0]["command"]
+    assert "--anonymous-auth=false" in cmd
+    assert "--encryption-provider-config=/etc/k/enc.yaml" in cmd
+    assert "--enable-bootstrap-token-auth=true" in cmd
+    assert "--authentication-token-webhook=true" in cmd
+    assert "--token-auth-file=/etc/k/tokens.csv" in cmd
 
 
 def test_input_is_not_mutated():
@@ -95,11 +109,348 @@ def test_input_is_not_mutated():
     assert original == snapshot
 
 
+def test_non_list_items_raises():
+    """Non-list items shape raises ValueError."""
+    with pytest.raises(ValueError, match="expected a kubectl List with items"):
+        redact_pod_list({})
+    with pytest.raises(ValueError, match="expected a kubectl List with items"):
+        redact_pod_list({"items": None})
+    with pytest.raises(ValueError, match="expected a kubectl List with items"):
+        redact_pod_list({"items": "not-a-list"})
+
+
+def test_empty_list_returns_empty():
+    """Empty list passes through."""
+    assert redact_pod_list({"items": []}) == {"items": []}
+
+
 def test_missing_fields_are_tolerated():
+    """Pods without spec, metadata, containers etc. pass through."""
     assert redact_pod_list({"items": [{"metadata": {"name": "x"}}]}) == {
         "items": [{"metadata": {"name": "x"}}]
     }
-    assert redact_pod_list({}) == {}
+
+
+def test_status_is_deleted():
+    """Pod status field is always deleted."""
+    doc = {
+        "items": [
+            {
+                "metadata": {"name": "test"},
+                "spec": {"containers": []},
+                "status": {
+                    "phase": "Running",
+                    "conditions": [{"message": "secret-found-here"}],
+                },
+            }
+        ]
+    }
+    result = redact_pod_list(doc)
+    assert "status" not in result["items"][0]
+
+
+def test_redact_argv_two_token_flag():
+    """Two-token: flag with secret word followed by non-safe value."""
+    argv = ["--token", "abc", "--port", "80"]
+    result = redact_argv(argv)
+    assert result == ["--token", REDACTED, "--port", "80"]
+
+
+def test_redact_argv_two_token_flag_safe_path():
+    """Two-token with safe path value (starts with /) is unchanged."""
+    argv = ["--password", "/etc/pw"]
+    result = redact_argv(argv)
+    assert result == ["--password", "/etc/pw"]
+
+
+def test_redact_argv_key_equals_value():
+    """Key=value in one element: leak becomes <key>=<redacted>."""
+    argv = ["--db-password=mysecret", "--port=8080"]
+    result = redact_argv(argv)
+    assert result == ["--db-password=<redacted>", "--port=8080"]
+
+
+def test_redact_argv_safe_boolean_values():
+    """Safe values (true/false) are never masked."""
+    argv = [
+        "--enable-bootstrap-token-auth=true",
+        "--authentication-token-webhook=true",
+        "--anonymous-auth=false",
+    ]
+    result = redact_argv(argv)
+    assert result == argv
+
+
+def test_redact_argv_safe_file_paths():
+    """Safe values (paths starting with /) are never masked."""
+    argv = [
+        "--encryption-provider-config=/etc/k/enc.yaml",
+        "--token-auth-file=/etc/k/tokens.csv",
+    ]
+    result = redact_argv(argv)
+    assert result == argv
+
+
+def test_redact_argv_url_credentials():
+    """URL credentials are redacted."""
+    # dsn contains SECRET_WORD, so Rule A applies: entire value masked
+    argv = ["--dsn=postgres://u:pw@h/d"]
+    result = redact_argv(argv)
+    assert result == ["--dsn=<redacted>"]
+
+    # DATABASE_URL has no SECRET_WORD in key, so Rule C applies: only password masked
+    argv2 = ["DATABASE_URL=postgres://u:pw@h/d"]
+    result2 = redact_argv(argv2)
+    assert result2 == ["DATABASE_URL=postgres://u:<redacted>@h/d"]
+
+
+def test_redact_argv_quoted_values_with_spaces():
+    """Quoted values with spaces are fully masked after =."""
+    argv = ['--password="a b c"']
+    result = redact_argv(argv)
+    assert result == [f"--password={REDACTED}"]
+
+
+def test_redact_argv_non_string_elements_untouched():
+    """Non-string elements pass through unchanged."""
+    argv = [123, "--port=80", None, {"key": "val"}]
+    result = redact_argv(argv)
+    assert result == [123, "--port=80", None, {"key": "val"}]
+
+
+def test_probe_exec_command_redacted():
+    """Probe exec.command is redacted like container command."""
+    doc = {
+        "items": [
+            {
+                "metadata": {"name": "test"},
+                "spec": {
+                    "containers": [
+                        {
+                            "name": "app",
+                            "livenessProbe": {
+                                "exec": {
+                                    "command": ["check-db", "--password=LEAK"]
+                                }
+                            },
+                        }
+                    ]
+                },
+            }
+        ]
+    }
+    result = redact_pod_list(doc)
+    cmd = result["items"][0]["spec"]["containers"][0]["livenessProbe"]["exec"]["command"]
+    assert cmd == ["check-db", f"--password={REDACTED}"]
+
+
+def test_probe_httpget_headers_values_redacted():
+    """httpGet.httpHeaders values (non-empty) are redacted."""
+    doc = {
+        "items": [
+            {
+                "metadata": {"name": "test"},
+                "spec": {
+                    "containers": [
+                        {
+                            "name": "app",
+                            "readinessProbe": {
+                                "httpGet": {
+                                    "path": "/health",
+                                    "httpHeaders": [
+                                        {"name": "Authorization", "value": "Bearer LEAK"},
+                                        {"name": "X-Empty", "value": ""},
+                                    ],
+                                }
+                            },
+                        }
+                    ]
+                },
+            }
+        ]
+    }
+    result = redact_pod_list(doc)
+    headers = result["items"][0]["spec"]["containers"][0]["readinessProbe"][
+        "httpGet"
+    ]["httpHeaders"]
+    assert headers[0]["value"] == REDACTED
+    assert headers[1]["value"] == ""
+
+
+def test_lifecycle_hooks_redacted():
+    """Lifecycle preStop/postStart exec.command and httpHeaders redacted."""
+    doc = {
+        "items": [
+            {
+                "metadata": {"name": "test"},
+                "spec": {
+                    "containers": [
+                        {
+                            "name": "app",
+                            "lifecycle": {
+                                "preStop": {
+                                    "exec": {
+                                        "command": ["shutdown.sh", "--password=LEAK"]
+                                    }
+                                },
+                                "postStart": {
+                                    "httpGet": {
+                                        "path": "/init",
+                                        "httpHeaders": [
+                                            {
+                                                "name": "X-API-Key",
+                                                "value": "secret123",
+                                            }
+                                        ],
+                                    }
+                                },
+                            },
+                        }
+                    ]
+                },
+            }
+        ]
+    }
+    result = redact_pod_list(doc)
+    cont = result["items"][0]["spec"]["containers"][0]
+    assert cont["lifecycle"]["preStop"]["exec"]["command"] == [
+        "shutdown.sh",
+        f"--password={REDACTED}",
+    ]
+    assert cont["lifecycle"]["postStart"]["httpGet"]["httpHeaders"][0]["value"] == (
+        REDACTED
+    )
+
+
+def test_flexvolume_options_values_redacted():
+    """flexVolume.options dict values are redacted."""
+    doc = {
+        "items": [
+            {
+                "metadata": {"name": "test"},
+                "spec": {
+                    "volumes": [
+                        {
+                            "name": "flex-vol",
+                            "flexVolume": {
+                                "driver": "company/flock",
+                                "options": {
+                                    "password": "secret123",
+                                    "username": "user",
+                                },
+                            },
+                        }
+                    ],
+                    "containers": [],
+                },
+            }
+        ]
+    }
+    result = redact_pod_list(doc)
+    opts = result["items"][0]["spec"]["volumes"][0]["flexVolume"]["options"]
+    assert opts["password"] == REDACTED
+    assert opts["username"] == REDACTED
+
+
+def test_csi_volume_attributes_values_redacted():
+    """csi.volumeAttributes dict values are redacted."""
+    doc = {
+        "items": [
+            {
+                "metadata": {"name": "test"},
+                "spec": {
+                    "volumes": [
+                        {
+                            "name": "csi-vol",
+                            "csi": {
+                                "driver": "csi.example.com",
+                                "volumeAttributes": {
+                                    "auth-token": "token123",
+                                    "region": "us-west",
+                                },
+                            },
+                        }
+                    ],
+                    "containers": [],
+                },
+            }
+        ]
+    }
+    result = redact_pod_list(doc)
+    attrs = result["items"][0]["spec"]["volumes"][0]["csi"]["volumeAttributes"]
+    assert attrs["auth-token"] == REDACTED
+    assert attrs["region"] == REDACTED
+
+
+def test_hostpath_volume_unchanged():
+    """hostPath volumes are unchanged."""
+    doc = {
+        "items": [
+            {
+                "metadata": {"name": "test"},
+                "spec": {
+                    "volumes": [
+                        {
+                            "name": "host-vol",
+                            "hostPath": {"path": "/var/secrets"},
+                        }
+                    ],
+                    "containers": [],
+                },
+            }
+        ]
+    }
+    result = redact_pod_list(doc)
+    vol = result["items"][0]["spec"]["volumes"][0]
+    assert vol == {"name": "host-vol", "hostPath": {"path": "/var/secrets"}}
+
+
+def test_planted_secret_sweep():
+    """Comprehensive test: no secret values survive in JSON output."""
+    secrets = ["mysecret", "token-abc", "pw123", "apikey-xyz"]
+    doc = {
+        "items": [
+            {
+                "metadata": {"name": "app"},
+                "spec": {
+                    "containers": [
+                        {
+                            "name": "web",
+                            "env": [
+                                {"name": "DB_PASSWORD", "value": secrets[0]},
+                                {"name": "TOKEN", "value": secrets[1]},
+                            ],
+                            "args": [
+                                f"--api-key={secrets[2]}",
+                                "--dsn=postgres://user:pw123@host/db",
+                            ],
+                            "livenessProbe": {
+                                "exec": {
+                                    "command": [
+                                        "test",
+                                        f"--password={secrets[3]}",
+                                    ]
+                                }
+                            },
+                        }
+                    ],
+                    "volumes": [
+                        {
+                            "name": "vol",
+                            "flexVolume": {
+                                "options": {"secret": secrets[0]}
+                            },
+                        }
+                    ],
+                },
+                "status": {"message": f"secret: {secrets[0]}"},
+            }
+        ]
+    }
+    result = redact_pod_list(doc)
+    output_str = json.dumps(result)
+    for secret in secrets:
+        assert secret not in output_str
 
 
 def test_credential_name_pattern():
@@ -137,6 +488,11 @@ def test_parse_secret_rows():
     }
 
 
-def test_secret_template_never_prints_values():
-    assert "$v}}" not in SECRET_TEMPLATE
-    assert "{{$k}}" in SECRET_TEMPLATE
+def test_secret_template_exact_value():
+    """SECRET_TEMPLATE never prints values ($v)."""
+    expected = (
+        '{{range .items}}{{.metadata.namespace}}{{"\\t"}}{{.metadata.name}}'
+        '{{"\\t"}}{{.type}}{{"\\t"}}'
+        '{{range $k, $v := .data}}{{$k}},{{end}}{{"\\n"}}{{end}}'
+    )
+    assert SECRET_TEMPLATE == expected
