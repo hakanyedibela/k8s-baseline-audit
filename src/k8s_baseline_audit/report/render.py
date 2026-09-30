@@ -35,6 +35,26 @@ class NarrativeError(ValueError):
     """Narratives are inconsistent with the analysis or with each other."""
 
 
+FORBIDDEN_WORDS = ("erfüllt", "fulfilled", "compliant", "konform")
+BLOCK_PREFIXES = ("#", "|", ">", "```", "---")
+
+
+def _check_texts(lang: str, n: Narrative) -> None:
+    if any(not v.strip() for v in n.fix_notes.values()):
+        raise NarrativeError(f"{lang}: empty fix note")
+    texts = [n.summary, *(p.reason for p in n.priorities.values()), *n.fix_notes.values()]
+    for text in texts:
+        low = text.lower()
+        for word in FORBIDDEN_WORDS:
+            if word in low:
+                raise NarrativeError(f"{lang}: forbidden word {word!r} in narrative")
+        if "<" in text or "![" in text:
+            raise NarrativeError(f"{lang}: HTML or image syntax in narrative")
+        for line in text.splitlines():
+            if line.lstrip().startswith(BLOCK_PREFIXES):
+                raise NarrativeError(f"{lang}: Markdown block syntax in narrative")
+
+
 def validate_narratives(narratives: dict[str, Narrative], finding_ids: set[str]) -> None:
     if not narratives:
         return
@@ -46,6 +66,10 @@ def validate_narratives(narratives: dict[str, Narrative], finding_ids: set[str])
         unknown = (set(n.priorities) | set(n.fix_notes)) - finding_ids
         if unknown:
             raise NarrativeError(f"{lang}: unknown finding ids: {sorted(unknown)}")
+        _check_texts(lang, n)
+        ranks = [v.rank for v in n.priorities.values()]
+        if len(ranks) != len(set(ranks)):
+            raise NarrativeError(f"{lang}: duplicate ranks in priorities")
     de, en = narratives["de"], narratives["en"]
     if {k: v.rank for k, v in de.priorities.items()} != {k: v.rank for k, v in en.priorities.items()}:
         raise NarrativeError("de and en priorities differ")
@@ -54,7 +78,15 @@ def validate_narratives(narratives: dict[str, Narrative], finding_ids: set[str])
 
 
 def md(text: object) -> str:
-    return str(text).replace("|", "\\|").replace("\r", " ").replace("\n", " ")
+    out = str(text).replace("\\", "\\\\")
+    for ch in ("|", "`", "<", ">", "[", "]"):
+        out = out.replace(ch, "\\" + ch)
+    return out.replace("\r", " ").replace("\n", " ")
+
+
+def code(text: object) -> str:
+    inner = str(text).replace("`", "'").replace("|", "\\|")
+    return "`" + inner.replace("\r", " ").replace("\n", " ") + "`"
 
 
 def is_vulnerability(f: Finding) -> bool:
@@ -106,6 +138,7 @@ def render_reports(inp: ReportInput, narratives: dict[str, Narrative] | None, ou
         keep_trailing_newline=True,
     )
     env.filters["md"] = md
+    env.filters["code"] = code
     template = env.get_template("report.md.j2")
     ordered = _ordered(inp.findings, narratives.get("en"))
     main = [f for f in ordered if not is_vulnerability(f)]
