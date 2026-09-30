@@ -6,6 +6,7 @@ from . import workload  # noqa: E402,F401
 from . import identity  # noqa: E402,F401,I001
 from . import isolation  # noqa: E402,F401,I001
 from . import secrets_images  # noqa: E402,F401,I001
+from . import control_plane  # noqa: E402,F401,I001
 
 
 def all_checks() -> list[Check]:
