@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ...models import Severity
-from .base import CheckContext, Hit, check, ev, meta_ref, spec_of
+from .base import CheckContext, Hit, check, ev, is_static_pod, meta_ref, spec_of
 
 ANONYMOUS = frozenset({"User:system:anonymous", "Group:system:unauthenticated"})
 
@@ -28,7 +28,9 @@ def cluster_admin_binding(ctx: CheckContext) -> list[Hit]:
         if (b.get("roleRef") or {}).get("name") != "cluster-admin":
             continue
         subjects = b.get("subjects") or []
-        if subjects and all(_subject_key(s) in allow for s in subjects):
+        if not subjects:
+            continue
+        if all(_subject_key(s) in allow for s in subjects):
             continue
         hits.append(
             Hit(
@@ -52,8 +54,9 @@ def wildcard_role(ctx: CheckContext) -> list[Hit]:
     hits = []
     for kind_file, label in (("clusterroles", "ClusterRole"), ("roles", "Role")):
         for i, role in enumerate(ctx.items(kind_file)):
-            name = (role.get("metadata") or {}).get("name") or ""
-            if label == "ClusterRole" and (name == "cluster-admin" or name.startswith("system:")):
+            metadata = role.get("metadata") or {}
+            labels = metadata.get("labels") or {}
+            if labels.get("kubernetes.io/bootstrapping") == "rbac-defaults":
                 continue
             for k, rule in enumerate(role.get("rules") or []):
                 verbs = rule.get("verbs") or []
@@ -103,6 +106,8 @@ def anonymous_binding(ctx: CheckContext) -> list[Hit]:
 def default_service_account(ctx: CheckContext) -> list[Hit]:
     hits = []
     for i, p in enumerate(ctx.items("pods")):
+        if is_static_pod(p):
+            continue
         if spec_of(p).get("serviceAccountName") in (None, "", "default"):
             hits.append(
                 Hit(
@@ -129,6 +134,8 @@ def automount_token(ctx: CheckContext) -> list[Hit]:
     }
     hits = []
     for i, p in enumerate(ctx.items("pods")):
+        if is_static_pod(p):
+            continue
         spec = spec_of(p)
         value = spec.get("automountServiceAccountToken")
         if value is False:

@@ -76,9 +76,18 @@ def test_wildcard_roles():
         }
     ]
     clusterroles = [
-        {"metadata": {"name": "cluster-admin"}, "rules": [{"verbs": ["*"], "resources": ["*"]}]},
         {
-            "metadata": {"name": "system:controller:x"},
+            "metadata": {
+                "name": "cluster-admin",
+                "labels": {"kubernetes.io/bootstrapping": "rbac-defaults"},
+            },
+            "rules": [{"verbs": ["*"], "resources": ["*"]}],
+        },
+        {
+            "metadata": {
+                "name": "system:controller:x",
+                "labels": {"kubernetes.io/bootstrapping": "rbac-defaults"},
+            },
             "rules": [{"verbs": ["*"], "resources": ["*"]}],
         },
         {
@@ -136,3 +145,92 @@ def test_long_lived_token_secret():
     assert [(h.resource.key(), h.evidence.json_path) for h in hits] == [
         ("Secret/default/tok", "$.items[0].type")
     ]
+
+
+def test_wildcard_role_with_rbac_defaults_label():
+    """Roles with rbac-defaults label are exempt from wildcard checks."""
+    clusterroles = [
+        {
+            "metadata": {
+                "name": "cluster-admin",
+                "labels": {"kubernetes.io/bootstrapping": "rbac-defaults"},
+            },
+            "rules": [{"verbs": ["*"], "resources": ["*"]}],
+        },
+        {
+            "metadata": {
+                "name": "system:controller:x",
+                "labels": {"kubernetes.io/bootstrapping": "rbac-defaults"},
+            },
+            "rules": [{"verbs": ["*"], "resources": ["*"]}],
+        },
+        {
+            "metadata": {"name": "system:evil"},
+            "rules": [{"verbs": ["*"], "resources": ["*"]}],
+        },
+    ]
+    hits = run_check("identity.wildcard_role", ctx(clusterroles=clusterroles))
+    assert [h.resource.key() for h in hits] == ["ClusterRole/-/system:evil"]
+
+
+def test_wildcard_role_null_rules():
+    """Roles with null rules do not crash."""
+    roles = [
+        {"metadata": {"name": "broken", "namespace": "default"}, "rules": None}
+    ]
+    hits = run_check("identity.wildcard_role", ctx(roles=roles))
+    assert hits == []
+
+
+def test_static_pods_not_flagged():
+    """Static/mirror pods (with Node owner) are not flagged."""
+    static_pod_with_owner = pod(
+        name="coredns",
+        namespace="kube-system",
+        owner={"kind": "Node", "name": "cp"},
+    )
+    del static_pod_with_owner["spec"]["serviceAccountName"]
+    static_pod_without_automount = pod(
+        name="etcd",
+        namespace="kube-system",
+        owner={"kind": "Node", "name": "cp"},
+        automountServiceAccountToken=None,
+    )
+
+    regular_pod_default_sa = pod(
+        name="app",
+        namespace="default",
+        serviceAccountName="default",
+    )
+    regular_pod_automount = pod(
+        name="app2",
+        namespace="default",
+        automountServiceAccountToken=True,
+    )
+
+    hits_default_sa = run_check(
+        "identity.default_service_account",
+        ctx(pods=[static_pod_with_owner, regular_pod_default_sa]),
+    )
+    assert [h.resource.name for h in hits_default_sa] == ["app"]
+
+    hits_automount = run_check(
+        "identity.automount_token",
+        ctx(pods=[static_pod_without_automount, regular_pod_automount]),
+    )
+    assert [h.resource.name for h in hits_automount] == ["app2"]
+
+
+def test_cluster_admin_binding_with_empty_subjects():
+    """Cluster-admin binding with empty or missing subjects is not flagged."""
+    c = ctx(
+        clusterrolebindings=[
+            crb("empty", "cluster-admin", []),
+            {
+                "metadata": {"name": "missing"},
+                "roleRef": {"kind": "ClusterRole", "name": "cluster-admin"},
+            },
+        ]
+    )
+    hits = run_check("identity.cluster_admin_binding", c)
+    assert hits == []

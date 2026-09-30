@@ -122,3 +122,9 @@ def sc(obj: dict) -> dict:
 
 def container_path(i: int, field_name: str, j: int) -> str:
     return f"$.items[{i}].spec.{field_name}[{j}]"
+
+
+def is_static_pod(pod: dict) -> bool:
+    """Check if pod is a static/mirror pod (owned by a Node)."""
+    owners = (pod.get("metadata") or {}).get("ownerReferences") or []
+    return any((owner or {}).get("kind") == "Node" for owner in owners)
