@@ -125,13 +125,26 @@ def support_table() -> dict:
 def version_unsupported(ctx: CheckContext) -> list[Hit]:
     docs = ctx.items("version")
     server = (docs[0] if docs else {}).get("serverVersion") or {}
-    key = f"{server.get('major', '')}.{re.sub(r'[^0-9]', '', server.get('minor', ''))}"
+    major = str(server.get("major", ""))
+    minor_digits = re.sub(r"[^0-9]", "", str(server.get("minor", "")))
+    if not major.isdigit() or not minor_digits:
+        raise ManualCheckNeeded("Kubernetes version document missing or malformed")
+    key = f"{major}.{minor_digits}"
     table = support_table()
-    eol = (table.get("releases") or {}).get(key)
+    releases = table.get("releases") or {}
+    eol = releases.get(key)
     if eol is None:
-        raise ManualCheckNeeded(
-            f"Kubernetes {key} not in support table (retrieved {table.get('retrieved')})"
+        parsed = [tuple(int(x) for x in k.split(".")) for k in releases]
+        older_than_table = (
+            bool(parsed)
+            and all(m == int(major) for m, _ in parsed)
+            and int(minor_digits) < min(n for _, n in parsed)
         )
+        if not older_than_table:
+            raise ManualCheckNeeded(
+                f"Kubernetes {key} not in support table (retrieved {table.get('retrieved')})"
+            )
+        eol = "0001-01-01"
     if date.fromisoformat(eol) < ctx.config.as_of:
         return [
             Hit(

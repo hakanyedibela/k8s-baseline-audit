@@ -101,7 +101,24 @@ def test_managed_minor_suffix_is_stripped(table):
 
 def test_unknown_version_needs_manual_check(table):
     with pytest.raises(ManualCheckNeeded, match="not in support table"):
-        run_check("version.unsupported", ctx(version=version("20")))
+        run_check("version.unsupported", ctx(version=version("99")))
+
+
+def test_version_older_than_table_is_out_of_support(table):
+    hits = run_check("version.unsupported", ctx(version=version("20")))
+    assert [h.evidence.json_path for h in hits] == ["$.serverVersion"]
+
+
+@pytest.mark.parametrize("doc", [[{}], [], [{"serverVersion": {"major": "", "minor": "x"}}]])
+def test_malformed_version_document_needs_manual_check(table, doc):
+    with pytest.raises(ManualCheckNeeded, match="missing or malformed"):
+        run_check("version.unsupported", ctx(version=doc))
+
+
+def test_real_table_with_fixed_date():
+    cfg = AnalyzerConfig(as_of=date(2026, 10, 1))
+    assert run_check("version.unsupported", ctx(cfg, version=version("29")))
+    assert run_check("version.unsupported", ctx(cfg, version=version("35"))) == []
 
 
 def test_as_of_date_is_used(table):
