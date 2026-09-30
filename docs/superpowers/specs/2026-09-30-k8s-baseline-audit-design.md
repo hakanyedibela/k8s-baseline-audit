@@ -346,3 +346,78 @@ can reject any single one.
    either mapped or explicitly excluded.
 10. **Image vulnerabilities get a compact table** in the report instead of one
     section per CVE, because trivy can return thousands of them.
+
+## 16. Source verification (2026-10-01)
+
+Resolves section 14, items 1, 2 and 4. Checked on bsi.bund.de on 2026-10-01.
+Short quotes below follow the BSI citation rule (verbatim, in quotation marks,
+with source).
+
+### 16.1 Certification basis (item 1): Kompendium 2023 is still the basis
+
+- The BSI "Prüfgrundlage für Zertifizierungen nach ISO 27001 auf der Basis von
+  IT-Grundschutz nach dem IT-Grundschutz-Kompendium", Version 4.8 of
+  01.02.2026, lists "IT-Grundschutz-Kompendium — Edition 2023 (Feb. 2023)" as a
+  mandatory audit basis, with no transition deadline set for it.
+  URL: https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/Zertifikat/Veroeffentl/Pruefgrundlagen_Kompendium.pdf?__blob=publicationFile&v=16
+  (linked from the "Zertifizierungsschema" page:
+  https://www.bsi.bund.de/DE/Themen/Unternehmen-und-Organisationen/Standards-und-Zertifizierung/Zertifizierung-und-Anerkennung/Zertifizierung-von-Managementsystemen/ISO-27001-Basis-IT-Grundschutz/Zertifizierungsschema/schema_node.html).
+- The Kompendium page names Edition 2023 as the current edition ("seit dem
+  1. Februar 2023 verfügbar und löst damit die Edition 2022 ab"):
+  https://www.bsi.bund.de/DE/Themen/Unternehmen-und-Organisationen/Standards-und-Zertifizierung/IT-Grundschutz/IT-Grundschutz-Kompendium/it-grundschutz-kompendium_node.html
+- The Grundschutz++ page (milestone plan "Stand September 2026") says the new
+  catalogue "löst das IT-Grundschutz-Kompendium ab", but dates certifiability
+  later: "1. Januar 2027 — Der GS++ ist zertifizierbar". Pilot phase ran
+  1 April to 31 August 2026; publication of the method is planned for
+  27 October 2026 (it-sa).
+  URL: https://www.bsi.bund.de/DE/Themen/Unternehmen-und-Organisationen/Standards-und-Zertifizierung/Grundschutz-in-der-Informationssicherheit/Grundschutz-Plus-Plus/grundschutz-plus-plus_node.html
+
+Consequence: the v1 mapping `kompendium-2023` targets the current audit basis.
+Correction to section 2: BSI's own milestone plan does not describe a launch
+of Grundschutz++ on 2026-01-01; it names 2027-01-01 as the date from which
+GS++ certification can be applied for. Re-check the Prüfgrundlage before each
+release; once it sets an end date ("Übergangsfrist") for Edition 2023, the
+report must state it.
+
+### 16.2 Reuse terms (item 2): commercial use needs a BSI licence
+
+BSI "Nutzungsbedingungen":
+https://www.bsi.bund.de/DE/Service/Nutzungsbedingungen/Nutzungsbedingungen_node.html
+
+- Non-commercial use for IT security purposes is free.
+- "Eine kommerzielle Verwendung von Inhalten, insbesondere denen des
+  IT-Grundschutzes, bedarf einer lizenzrechtlichen Vereinbarung mit dem BSI."
+  Contact named there: it-grundschutz@bsi.bund.de.
+- Quoting is allowed without consent if verbatim, in quotation marks, with
+  source.
+- No use may suggest a cooperation with the BSI. "Die Verwendung des Namens
+  des BSI als Referenz bedarf der vorherigen Zustimmung des BSI."
+- Downloads of IT-Grundschutz content may be modified for implementing
+  internal security measures.
+
+Consequence: the mapping stores only requirement IDs, levels, own
+paraphrases and links. Whether own paraphrases of requirements, used in paid
+client audits, count as commercial use of "Inhalte des IT-Grundschutzes" is a
+legal question this project cannot answer. **Open item for the owner before
+commercial use:** ask it-grundschutz@bsi.bund.de (or a lawyer). Reports must
+not suggest BSI endorsement or cooperation.
+
+### 16.3 Module documents (item 4)
+
+Both modules exist as Edition 2023 single PDFs; the Edition 2022 APP.4.4 URL
+from the plan is superseded and not used.
+
+| Module | Edition | Pages | URL | SHA-256 of the file read |
+|---|---|---|---|---|
+| APP.4.4 Kubernetes | 2023 | 8 | https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/06_APP_Anwendungen/APP_4_4_Kubernetes_Edition_2023.pdf?__blob=publicationFile&v=4 | `03c63c58909476e20e3ec4da5e2b8be4beb03cf55c7a708bf11854c8f2a6be44` |
+| SYS.1.6 Containerisierung | 2023 | 9 | https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4 | `114d9fabc9077a93d24c778a4cb2959998bcaa233416415f6e2cbc05964f2393` |
+
+Found via the "IT-Grundschutz-Bausteine (Edition 2023)" download page:
+https://www.bsi.bund.de/DE/Themen/Unternehmen-und-Organisationen/Standards-und-Zertifizierung/IT-Grundschutz/IT-Grundschutz-Kompendium/IT-Grundschutz-Bausteine/Bausteine_Download_Edition_node.html
+
+Requirements extracted: APP.4.4.A1–A21 (5 basic, 7 standard, 9 elevated) and
+SYS.1.6.A1–A26 (8 basic, 12 standard, 6 elevated), 47 in total. None is
+marked withdrawn ("ENTFALLEN"). The SYS.1.6.A5 heading is split across two
+lines in the PDF text and was confirmed by hand. Page numbers in the mapping
+are the PDF page on which the requirement heading appears (identical to the
+printed "Seite n von m").

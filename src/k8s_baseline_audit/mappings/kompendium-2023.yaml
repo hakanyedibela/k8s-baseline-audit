@@ -1,0 +1,1135 @@
+# BSI IT-Grundschutz-Kompendium Edition 2023, modules APP.4.4 and SYS.1.6.
+# Titles and summaries are own paraphrases, not BSI text. Only requirement IDs
+# and levels are taken from the source documents. Sources: see
+# docs/superpowers/specs/2026-09-30-k8s-baseline-audit-design.md, section 16.
+name: kompendium-2023
+framework: BSI IT-Grundschutz-Kompendium
+edition: "2023"
+modules: ["APP.4.4", "SYS.1.6"]
+requirements:
+  # ---------------------------------------------------------------- APP.4.4
+  - id: APP.4.4.A1
+    module: APP.4.4
+    level: basic
+    title:
+      de: Trennung der Anwendungen planen
+      en: Plan the separation of applications
+    summary:
+      de: >-
+        Vor der Inbetriebnahme festlegen, wie Anwendungen und Umgebungen
+        (Test, Produktion) über Namespaces, Cluster und Netze getrennt werden,
+        abgeleitet aus ihrem Schutzbedarf.
+      en: >-
+        Before go-live, decide how applications and environments (test,
+        production) are separated through namespaces, clusters and networks,
+        based on their protection needs.
+    source: {document: "APP.4.4 Kubernetes", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/06_APP_Anwendungen/APP_4_4_Kubernetes_Edition_2023.pdf?__blob=publicationFile&v=4", page: 4}
+    coverage_type: organizational
+    questions:
+      - de: Gibt es ein dokumentiertes Trennungskonzept für Namespaces, Cluster und Netze? Wer hat es freigegeben?
+        en: Is there a documented separation concept for namespaces, clusters and networks? Who approved it?
+      - de: Laufen Anwendungen mit unterschiedlichem Schutzbedarf im selben Cluster? Wenn ja, mit welcher Begründung?
+        en: Do applications with different protection needs share a cluster? If so, what is the justification?
+  - id: APP.4.4.A2
+    module: APP.4.4
+    level: basic
+    title:
+      de: Automatisierung mit CI/CD planen
+      en: Plan automation with CI/CD
+    summary:
+      de: >-
+        Automatisierten Betrieb über CI/CD erst nach einer Planung einführen,
+        die den gesamten Lebenszyklus, das Rollen- und Rechtekonzept und den
+        Schutz von Secrets abdeckt.
+      en: >-
+        Introduce CI/CD-driven operation only after planning that covers the
+        whole lifecycle, the role and permission concept and the protection of
+        secrets.
+    source: {document: "APP.4.4 Kubernetes", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/06_APP_Anwendungen/APP_4_4_Kubernetes_Edition_2023.pdf?__blob=publicationFile&v=4", page: 4}
+    coverage_type: organizational
+    questions:
+      - de: Welche Pipeline darf in welche Namespaces deployen, und mit welchen Rechten?
+        en: Which pipeline may deploy into which namespaces, and with which permissions?
+      - de: Wie werden Secrets in der Pipeline gespeichert und rotiert?
+        en: How are secrets stored and rotated in the pipeline?
+  - id: APP.4.4.A3
+    module: APP.4.4
+    level: basic
+    title:
+      de: Identitäts- und Berechtigungsmanagement
+      en: Identity and permission management
+    summary:
+      de: >-
+        Jede Aktion an Kubernetes und der Control Plane authentifizieren und
+        autorisieren; administrative Aktionen nie anonym zulassen.
+        Rechte nur im nötigen Umfang vergeben, uneingeschränkte Rechte nur
+        sehr sparsam.
+      en: >-
+        Authenticate and authorize every action on Kubernetes and the control
+        plane; never allow administrative actions anonymously.
+        Grant only the permissions that are needed, and unrestricted
+        permissions very sparingly.
+    source: {document: "APP.4.4 Kubernetes", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/06_APP_Anwendungen/APP_4_4_Kubernetes_Edition_2023.pdf?__blob=publicationFile&v=4", page: 4}
+    coverage_type: partial
+    checks:
+      - identity.anonymous_binding
+      - control_plane.anonymous_auth
+      - identity.cluster_admin_binding
+      - identity.wildcard_role
+    questions:
+      - de: Wie authentifizieren sich Administratoren (OIDC, Zertifikate), und wie werden Zugänge entzogen?
+        en: How do administrators authenticate (OIDC, certificates), and how is access revoked?
+      - de: Wer darf Automatisierungsabläufe definieren, und wer darf Persistent Volumes anlegen oder ändern?
+        en: Who may define automation processes, and who may create or change persistent volumes?
+  - id: APP.4.4.A4
+    module: APP.4.4
+    level: basic
+    title:
+      de: Pods voneinander trennen
+      en: Separate pods from each other
+    summary:
+      de: >-
+        Der Kernel der Nodes muss Pods gegeneinander abschotten (etwa über
+        Linux-Namespaces und cgroups), mindestens bei Prozess- und
+        Benutzerkennungen, Interprozesskommunikation, Dateisystem, Netz und
+        Hostname.
+      en: >-
+        The node kernel must isolate pods from each other (for example via
+        Linux namespaces and cgroups), covering at least process and user IDs,
+        inter-process communication, file system, network and hostname.
+    source: {document: "APP.4.4 Kubernetes", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/06_APP_Anwendungen/APP_4_4_Kubernetes_Edition_2023.pdf?__blob=publicationFile&v=4", page: 5}
+    coverage_type: partial
+    checks:
+      - workload.host_namespaces
+    questions:
+      - de: Welche Pods nutzen Host-Netz, Host-PID oder Host-IPC, und ist das für jeden dieser Pods begründet?
+        en: Which pods use the host network, host PID or host IPC, and is each case justified?
+      - de: Welches Betriebssystem und welche Container-Runtime laufen auf den Nodes, und sind User-Namespaces aktiv?
+        en: Which operating system and container runtime run on the nodes, and are user namespaces enabled?
+  - id: APP.4.4.A5
+    module: APP.4.4
+    level: basic
+    title:
+      de: Cluster sichern
+      en: Back up the cluster
+    summary:
+      de: >-
+        Den Cluster vollständig sichern: Persistent Volumes,
+        Konfigurationsdateien, Clusterzustand samt Erweiterungen, etcd,
+        nötige Infrastrukturanwendungen sowie Code- und Image-Registries.
+        Snapshots ergänzen die Sicherung, ersetzen sie aber nicht.
+      en: >-
+        Back up the whole cluster: persistent volumes, configuration files,
+        cluster state including extensions, etcd, required infrastructure
+        applications, and code and image registries. Snapshots may add to the
+        backup but never replace it.
+    source: {document: "APP.4.4 Kubernetes", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/06_APP_Anwendungen/APP_4_4_Kubernetes_Edition_2023.pdf?__blob=publicationFile&v=4", page: 5}
+    coverage_type: manual
+    questions:
+      - de: Wie werden etcd und die Persistent Volumes gesichert, wie oft, und wann wurde zuletzt eine Wiederherstellung getestet?
+        en: How are etcd and the persistent volumes backed up, how often, and when was a restore last tested?
+      - de: Sind Registries und Infrastrukturanwendungen (z. B. CI/CD, Speicher) in der Sicherung enthalten?
+        en: Are registries and infrastructure applications (e.g. CI/CD, storage) included in the backup?
+  - id: APP.4.4.A6
+    module: APP.4.4
+    level: standard
+    title:
+      de: Pods über Init-Container initialisieren
+      en: Initialize pods through init containers
+    summary:
+      de: >-
+        Initialisierungsschritte in eigene Init-Container legen, die sauber
+        beenden; die übrigen Container erst nach erfolgreicher
+        Initialisierung starten.
+      en: >-
+        Put initialization steps into dedicated init containers that exit
+        cleanly; start the remaining containers only after initialization
+        succeeded.
+    source: {document: "APP.4.4 Kubernetes", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/06_APP_Anwendungen/APP_4_4_Kubernetes_Edition_2023.pdf?__blob=publicationFile&v=4", page: 5}
+    coverage_type: manual
+    questions:
+      - de: Welche Anwendungen führen beim Start Initialisierungen aus, und laufen diese in Init-Containern?
+        en: Which applications run initialization steps at start-up, and do these run in init containers?
+  - id: APP.4.4.A7
+    module: APP.4.4
+    level: standard
+    title:
+      de: Netze im Cluster trennen
+      en: Separate networks in the cluster
+    summary:
+      de: >-
+        Netze für Node- und Control-Plane-Administration und für
+        Anwendungen trennen. Verkehr zwischen Namespaces zunächst sperren und
+        nur Nötiges freigeben; Verwaltungsports nur aus dem
+        Administrationsnetz erreichbar machen. Netzregeln nur durch wenige
+        Administratoren änderbar.
+      en: >-
+        Separate the networks for node and control plane administration from
+        application networks. Block traffic between namespaces by default and
+        allow only what is needed; make management ports reachable only from
+        the administration network. Only a few administrators may change
+        network rules.
+    source: {document: "APP.4.4 Kubernetes", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/06_APP_Anwendungen/APP_4_4_Kubernetes_Edition_2023.pdf?__blob=publicationFile&v=4", page: 5}
+    coverage_type: partial
+    checks:
+      - isolation.no_network_policy
+      - isolation.no_default_deny
+      - isolation.allow_all_policy
+    questions:
+      - de: Sind Administrationsnetz, Control-Plane-Netz und Anwendungsnetze getrennt? Wie sind API-Server, kubelet und etcd abgeschirmt?
+        en: Are the administration network, the control plane network and the application networks separated? How are the API server, kubelet and etcd shielded?
+      - de: Werden neben Kubernetes-NetworkPolicies CNI-eigene Regeln (z. B. Calico, Cilium) genutzt, auch für ausgehenden Verkehr?
+        en: Are CNI-specific rules (e.g. Calico, Cilium) used in addition to Kubernetes NetworkPolicies, including for egress?
+      - de: Wer darf das CNI verwalten und Netzregeln anlegen oder ändern?
+        en: Who may manage the CNI and create or change network rules?
+  - id: APP.4.4.A8
+    module: APP.4.4
+    level: standard
+    title:
+      de: Konfigurationsdateien absichern
+      en: Protect configuration files
+    summary:
+      de: >-
+        Konfigurationsdateien des Clusters und aller Erweiterungen
+        versionieren und kommentieren. Zugriff auf deren Verwaltung knapp
+        halten, besonders bei Dateien der Control Plane.
+      en: >-
+        Keep the configuration files of the cluster and all extensions under
+        version control with annotations. Restrict access to their management,
+        especially for control plane files.
+    source: {document: "APP.4.4 Kubernetes", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/06_APP_Anwendungen/APP_4_4_Kubernetes_Edition_2023.pdf?__blob=publicationFile&v=4", page: 5}
+    coverage_type: organizational
+    questions:
+      - de: Liegen alle Cluster-Konfigurationen versioniert vor (z. B. Git, GitOps), und sind Änderungen nachvollziehbar kommentiert?
+        en: Are all cluster configurations under version control (e.g. Git, GitOps), with traceable comments on changes?
+      - de: Wer hat Lese- und Schreibzugriff auf die Konfiguration der Control Plane?
+        en: Who has read and write access to the control plane configuration?
+  - id: APP.4.4.A9
+    module: APP.4.4
+    level: standard
+    title:
+      de: Service-Accounts gezielt nutzen
+      en: Use service accounts deliberately
+    summary:
+      de: >-
+        Pods nicht unter dem default-Service-Account betreiben und diesem
+        keine Rechte geben. Je Anwendung ein eigener Service-Account mit
+        minimalen Rechten; Pods ohne API-Bedarf erhalten kein Token.
+        Privilegierte Accounts nur für die Control Plane; eigene Tokens je
+        Automatisierungsprogramm.
+      en: >-
+        Do not run pods under the default service account and give it no
+        permissions. Use one service account per application with minimal
+        permissions; pods that do not need the API get no token. Privileged
+        accounts only for the control plane; separate tokens per automation
+        program.
+    source: {document: "APP.4.4 Kubernetes", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/06_APP_Anwendungen/APP_4_4_Kubernetes_Edition_2023.pdf?__blob=publicationFile&v=4", page: 6}
+    coverage_type: partial
+    checks:
+      - identity.default_service_account
+      - identity.automount_token
+    questions:
+      - de: Welche der Pods mit eingebundenem Token greifen tatsächlich auf die Kubernetes-API zu?
+        en: Which of the pods with a mounted token actually access the Kubernetes API?
+      - de: Sind an default-Service-Accounts Rollen gebunden? Welche Service-Accounts außerhalb der Control Plane haben weitreichende Rechte?
+        en: Are roles bound to default service accounts? Which service accounts outside the control plane hold broad permissions?
+  - id: APP.4.4.A10
+    module: APP.4.4
+    level: standard
+    title:
+      de: Automatisierungsprozesse absichern
+      en: Secure automation processes
+    summary:
+      de: >-
+        CI/CD-Prozesse nur mit den nötigen Rechten betreiben. Wenn mehrere
+        Benutzergruppen über die Automatisierung ändern oder deployen, je
+        Gruppe getrennte Prozesse mit eigenen Rechten nutzen.
+      en: >-
+        Run CI/CD processes with only the permissions they need. If several
+        user groups change configuration or deploy through the automation,
+        use separate processes per group with their own permissions.
+    source: {document: "APP.4.4 Kubernetes", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/06_APP_Anwendungen/APP_4_4_Kubernetes_Edition_2023.pdf?__blob=publicationFile&v=4", page: 6}
+    coverage_type: organizational
+    questions:
+      - de: Mit welchen Kubernetes-Rechten laufen die CI/CD-Pipelines, und sind diese je Team oder Anwendung getrennt?
+        en: With which Kubernetes permissions do the CI/CD pipelines run, and are they separated per team or application?
+  - id: APP.4.4.A11
+    module: APP.4.4
+    level: standard
+    title:
+      de: Container per Health Check überwachen
+      en: Monitor containers with health checks
+    summary:
+      de: >-
+        Für jeden Container Readiness- und Liveness-Prüfungen mit passenden
+        Zeitspannen festlegen, die bei gestörter Funktion anschlagen, damit
+        Kubernetes Pods neu startet oder entfernt.
+      en: >-
+        Define readiness and liveness probes with suitable time limits for
+        every container, failing when the software does not work properly,
+        so that Kubernetes restarts or removes the pods.
+    source: {document: "APP.4.4 Kubernetes", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/06_APP_Anwendungen/APP_4_4_Kubernetes_Edition_2023.pdf?__blob=publicationFile&v=4", page: 6}
+    coverage_type: manual
+    questions:
+      - de: Haben alle Container Readiness- und Liveness-Probes, und prüfen diese die eigentliche Funktion der Anwendung?
+        en: Do all containers have readiness and liveness probes, and do these test the actual function of the application?
+  - id: APP.4.4.A12
+    module: APP.4.4
+    level: standard
+    title:
+      de: Infrastrukturanwendungen absichern
+      en: Secure infrastructure applications
+    summary:
+      de: >-
+        Eigene Registries, Automatisierung, Speicherverwaltung und
+        Konfigurationsablagen absichern: personenbezogene und
+        Service-Accounts, verschlüsselte Verbindungen, minimale Rechte,
+        Änderungsprotokoll und regelmäßige Sicherung.
+      en: >-
+        Secure self-operated registries, automation, storage management and
+        configuration stores: personal and service accounts, encrypted
+        connections, minimal permissions, change logging and regular backups.
+    source: {document: "APP.4.4 Kubernetes", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/06_APP_Anwendungen/APP_4_4_Kubernetes_Edition_2023.pdf?__blob=publicationFile&v=4", page: 6}
+    coverage_type: manual
+    questions:
+      - de: Welche Infrastrukturanwendungen (Registry, CI/CD, Speicher, GitOps) werden selbst betrieben, und wie sind Zugang, Verschlüsselung, Protokollierung und Sicherung geregelt?
+        en: Which infrastructure applications (registry, CI/CD, storage, GitOps) are self-operated, and how are access, encryption, logging and backup handled?
+  - id: APP.4.4.A13
+    module: APP.4.4
+    level: elevated
+    title:
+      de: Konfiguration automatisiert auditieren
+      en: Audit the configuration automatically
+    summary:
+      de: >-
+        Einstellungen von Nodes, Kubernetes und Anwendungs-Pods automatisch
+        gegen eine Liste erlaubter Werte und gegen anerkannte Benchmarks
+        prüfen und die Regeln im Cluster mit passenden Werkzeugen durchsetzen.
+      en: >-
+        Automatically audit the settings of nodes, Kubernetes and application
+        pods against a list of allowed values and against recognized
+        benchmarks, and enforce the rules in the cluster with suitable tools.
+    source: {document: "APP.4.4 Kubernetes", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/06_APP_Anwendungen/APP_4_4_Kubernetes_Edition_2023.pdf?__blob=publicationFile&v=4", page: 6}
+    coverage_type: organizational
+    questions:
+      - de: Läuft ein regelmäßiges, automatisches Audit (z. B. CIS-Benchmark), und wer wertet die Ergebnisse aus?
+        en: Is there a regular automated audit (e.g. CIS benchmark), and who evaluates the results?
+      - de: Mit welchen Werkzeugen werden Regeln im Cluster durchgesetzt (z. B. Pod Security Admission, Kyverno, Gatekeeper)?
+        en: Which tools enforce rules in the cluster (e.g. Pod Security Admission, Kyverno, Gatekeeper)?
+  - id: APP.4.4.A14
+    module: APP.4.4
+    level: elevated
+    title:
+      de: Nodes mit festen Aufgaben
+      en: Nodes with dedicated roles
+    summary:
+      de: >-
+        Nodes feste Aufgaben zuweisen und dort nur passende Pods betreiben:
+        Bastion-Nodes für externen Verkehr, Management-Nodes für die Control
+        Plane, Speicher-Nodes nur für Speicherdienste.
+      en: >-
+        Give nodes fixed roles and run only matching pods on them: bastion
+        nodes for external traffic, management nodes for the control plane,
+        storage nodes only for storage services.
+    source: {document: "APP.4.4 Kubernetes", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/06_APP_Anwendungen/APP_4_4_Kubernetes_Edition_2023.pdf?__blob=publicationFile&v=4", page: 7}
+    coverage_type: manual
+    questions:
+      - de: Wie ist sichergestellt, dass nur passende Pods auf Control-Plane-, Bastion- und Speicher-Nodes laufen (Taints, Node-Selektoren)?
+        en: How is it ensured that only matching pods run on control plane, bastion and storage nodes (taints, node selectors)?
+  - id: APP.4.4.A15
+    module: APP.4.4
+    level: elevated
+    title:
+      de: Eigene Cluster oder Nodes bei sehr hohem Schutzbedarf
+      en: Own clusters or nodes for very high protection needs
+    summary:
+      de: >-
+        Anwendungen mit sehr hohem Schutzbedarf auf eigenen Clustern oder
+        exklusiven Nodes betreiben.
+      en: >-
+        Run applications with very high protection needs on their own
+        clusters or on nodes reserved for them.
+    source: {document: "APP.4.4 Kubernetes", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/06_APP_Anwendungen/APP_4_4_Kubernetes_Edition_2023.pdf?__blob=publicationFile&v=4", page: 7}
+    coverage_type: organizational
+    questions:
+      - de: Welche Anwendungen haben sehr hohen Schutzbedarf, und laufen sie auf eigenen Clustern oder exklusiven Nodes?
+        en: Which applications have very high protection needs, and do they run on their own clusters or exclusive nodes?
+  - id: APP.4.4.A16
+    module: APP.4.4
+    level: elevated
+    title:
+      de: Operatoren einsetzen
+      en: Use operators
+    summary:
+      de: >-
+        Betriebsaufgaben besonders kritischer Anwendungen und der Control
+        Plane über Operatoren automatisieren.
+      en: >-
+        Automate operational tasks of especially critical applications and of
+        the control plane through operators.
+    source: {document: "APP.4.4 Kubernetes", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/06_APP_Anwendungen/APP_4_4_Kubernetes_Edition_2023.pdf?__blob=publicationFile&v=4", page: 7}
+    coverage_type: organizational
+    questions:
+      - de: Welche kritischen Anwendungen und Control-Plane-Komponenten werden über Operatoren betrieben?
+        en: Which critical applications and control plane components are run through operators?
+  - id: APP.4.4.A17
+    module: APP.4.4
+    level: elevated
+    title:
+      de: Nodes attestieren
+      en: Attest nodes
+    summary:
+      de: >-
+        Nodes weisen ihre Integrität kryptografisch, möglichst per TPM,
+        gegenüber der Control Plane nach; nur so geprüfte Nodes treten dem
+        Cluster bei.
+      en: >-
+        Nodes prove their integrity to the control plane cryptographically,
+        preferably with a TPM; only nodes that pass this may join the
+        cluster.
+    source: {document: "APP.4.4 Kubernetes", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/06_APP_Anwendungen/APP_4_4_Kubernetes_Edition_2023.pdf?__blob=publicationFile&v=4", page: 7}
+    coverage_type: manual
+    questions:
+      - de: Wird die Integrität der Nodes vor dem Clusterbeitritt nachgewiesen (z. B. TPM, Measured Boot)?
+        en: Is node integrity verified before a node joins the cluster (e.g. TPM, measured boot)?
+  - id: APP.4.4.A18
+    module: APP.4.4
+    level: elevated
+    title:
+      de: Mikrosegmentierung
+      en: Micro-segmentation
+    summary:
+      de: >-
+        Auch innerhalb eines Namespaces nur nötige Verbindungen zwischen Pods
+        zulassen. Die Regeln bestimmen Quelle und Ziel genau (z. B. über
+        Labels, Service-Accounts oder Zertifikate); diese Merkmale sind nur
+        durch Berechtigte änderbar.
+      en: >-
+        Allow only necessary connections between pods, also within a
+        namespace. The rules name source and target precisely (e.g. via
+        labels, service accounts or certificates); only authorized parties
+        may change these attributes.
+    source: {document: "APP.4.4 Kubernetes", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/06_APP_Anwendungen/APP_4_4_Kubernetes_Edition_2023.pdf?__blob=publicationFile&v=4", page: 7}
+    coverage_type: partial
+    checks:
+      - isolation.no_network_policy
+      - isolation.no_default_deny
+      - isolation.allow_all_policy
+    questions:
+      - de: Beschränken die Netzregeln auch den Verkehr zwischen Pods desselben Namespaces auf die nötigen Ports?
+        en: Do the network rules also limit traffic between pods of the same namespace to the required ports?
+      - de: Wer darf die Labels und Service-Accounts ändern, auf die sich die Netzregeln stützen?
+        en: Who may change the labels and service accounts that the network rules rely on?
+  - id: APP.4.4.A19
+    module: APP.4.4
+    level: elevated
+    title:
+      de: Kubernetes ausfallsicher betreiben
+      en: Run Kubernetes with high availability
+    summary:
+      de: >-
+        Den Betrieb so auslegen, dass Cluster und Anwendungen den Ausfall
+        eines Standorts ohne Unterbrechung überstehen oder schnell anderswo
+        anlaufen. Control Plane, Infrastruktur und Pods über mehrere
+        Brandabschnitte verteilen.
+      en: >-
+        Design operations so that clusters and applications survive the loss
+        of a site without interruption or restart quickly elsewhere. Spread
+        control plane, infrastructure and pods across several fire
+        compartments.
+    source: {document: "APP.4.4 Kubernetes", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/06_APP_Anwendungen/APP_4_4_Kubernetes_Edition_2023.pdf?__blob=publicationFile&v=4", page: 7}
+    coverage_type: manual
+    questions:
+      - de: Über wie viele Standorte oder Brandabschnitte sind Control Plane und Nodes verteilt, und wurde ein Standortausfall geprobt?
+        en: Across how many sites or fire compartments are the control plane and nodes spread, and has a site failure been rehearsed?
+  - id: APP.4.4.A20
+    module: APP.4.4
+    level: elevated
+    title:
+      de: Persistente Daten verschlüsselt speichern
+      en: Encrypt persistent data
+    summary:
+      de: >-
+        Dateisysteme mit persistenten Daten der Control Plane, vor allem etcd,
+        und der Anwendungen verschlüsseln.
+      en: >-
+        Encrypt the file systems holding persistent data of the control
+        plane, especially etcd, and of the applications.
+    source: {document: "APP.4.4 Kubernetes", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/06_APP_Anwendungen/APP_4_4_Kubernetes_Edition_2023.pdf?__blob=publicationFile&v=4", page: 7}
+    coverage_type: manual
+    questions:
+      - de: Sind die Datenträger von etcd und der Persistent Volumes verschlüsselt (z. B. LUKS, verschlüsselte Cloud-Volumes)?
+        en: Are the disks of etcd and of the persistent volumes encrypted (e.g. LUKS, encrypted cloud volumes)?
+  - id: APP.4.4.A21
+    module: APP.4.4
+    level: elevated
+    title:
+      de: Pods regelmäßig neu starten
+      en: Restart pods regularly
+    summary:
+      de: >-
+        Bei erhöhtem Angriffsrisiko und sehr hohem Schutzbedarf Pods
+        regelmäßig neu starten, spätestens nach 24 Stunden, ohne die
+        Verfügbarkeit zu gefährden.
+      en: >-
+        With increased attack risk and very high protection needs, restart
+        pods regularly, at the latest after 24 hours, without harming
+        availability.
+    source: {document: "APP.4.4 Kubernetes", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/06_APP_Anwendungen/APP_4_4_Kubernetes_Edition_2023.pdf?__blob=publicationFile&v=4", page: 8}
+    coverage_type: manual
+    questions:
+      - de: Werden Pods sehr schutzbedürftiger Anwendungen regelmäßig neu gestartet, und wie wird dabei die Verfügbarkeit gesichert?
+        en: Are pods of applications with very high protection needs restarted regularly, and how is availability kept during restarts?
+  # ---------------------------------------------------------------- SYS.1.6
+  - id: SYS.1.6.A1
+    module: SYS.1.6
+    level: basic
+    title:
+      de: Container-Einsatz planen
+      en: Plan the use of containers
+    summary:
+      de: >-
+        Vor dem Einsatz den Zweck der Container festlegen und darauf
+        aufbauend Installation, Betrieb und Außerbetriebnahme samt
+        Betriebsaufwand planen und dokumentieren.
+      en: >-
+        Before use, define the purpose of the containers and, based on it,
+        plan and document installation, operation and decommissioning,
+        including the operational effort.
+    source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 5}
+    coverage_type: organizational
+    questions:
+      - de: Gibt es eine dokumentierte Planung mit dem Ziel des Container-Einsatzes? Wer hat sie freigegeben?
+        en: Is there a documented plan that states the purpose of using containers? Who approved it?
+  - id: SYS.1.6.A2
+    module: SYS.1.6
+    level: basic
+    title:
+      de: Container-Verwaltung planen
+      en: Plan container management
+    summary:
+      de: >-
+        Die Verwaltung über den ganzen Lebenszyklus planen. Wer Container
+        baut, zählt in Teilen wie Administrierende. Starten, Stoppen und
+        Überwachen nur über die Verwaltungssoftware.
+      en: >-
+        Plan management over the whole lifecycle. People who build containers
+        count partly as administrators. Start, stop and monitor containers
+        only through the management software.
+    source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 5}
+    coverage_type: organizational
+    questions:
+      - de: Werden Personen, die Images bauen, bei Rechten und Überprüfungen wie Administrierende behandelt?
+        en: Are people who build images treated like administrators regarding permissions and reviews?
+      - de: Werden Container ausschließlich über Kubernetes gestartet und gestoppt, oder auch direkt über die Runtime auf den Nodes?
+        en: Are containers started and stopped only through Kubernetes, or also directly through the runtime on the nodes?
+  - id: SYS.1.6.A3
+    module: SYS.1.6
+    level: basic
+    title:
+      de: Containerisierte Systeme sicher einsetzen
+      en: Operate containerized systems securely
+    summary:
+      de: >-
+        Auswirkungen der Containerisierung auf Systeme und Anwendungen
+        bewerten. Anhand des Schutzbedarfs prüfen, ob Isolation und Kapselung
+        von Containern und virtuellen Netzen ausreichen; Overlay-Netze
+        modellieren, Verfügbarkeit und Durchsatz sichern und den Zustand im
+        Betrieb überwachen.
+      en: >-
+        Assess how containerization affects systems and applications. Check,
+        based on protection needs, whether isolation of containers and virtual
+        networks is sufficient; model overlay networks, ensure availability
+        and throughput and monitor health during operation.
+    source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 5}
+    coverage_type: organizational
+    questions:
+      - de: Wurde je Anwendung dokumentiert geprüft, ob die Container-Isolation ihrem Schutzbedarf genügt?
+        en: Was it assessed and documented per application whether container isolation matches its protection needs?
+      - de: Sind die virtuellen und Overlay-Netze in der Netzdokumentation modelliert?
+        en: Are the virtual and overlay networks modelled in the network documentation?
+  - id: SYS.1.6.A4
+    module: SYS.1.6
+    level: basic
+    title:
+      de: Bereitstellung von Images planen
+      en: Plan image provisioning
+    summary:
+      de: >-
+        Den Ablauf, wie Images bereitgestellt und verteilt werden, planen und
+        dokumentieren.
+      en: >-
+        Plan and document how images are provided and distributed.
+    source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 6}
+    coverage_type: organizational
+    questions:
+      - de: Wie gelangen Images vom Build in die Produktion, und wo ist dieser Ablauf dokumentiert?
+        en: How do images get from build to production, and where is this process documented?
+  - id: SYS.1.6.A5
+    module: SYS.1.6
+    level: basic
+    title:
+      de: Administrations- und Zugangsnetze trennen
+      en: Separate administration and access networks
+    summary:
+      de: >-
+        Netze für Host-Administration, Container-Administration und den
+        Zugang zu den Containern nach Schutzbedarf trennen; den Host nur aus
+        dem Administrationsnetz verwalten. Nur nötige Kommunikation
+        zulassen.
+      en: >-
+        Separate the networks for host administration, container
+        administration and access to the containers according to protection
+        needs; administer hosts only from the administration network. Allow
+        only necessary communication.
+    source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 6}
+    coverage_type: partial
+    checks:
+      - isolation.no_network_policy
+      - isolation.no_default_deny
+      - isolation.allow_all_policy
+    questions:
+      - de: Ist die Administration der Nodes nur aus einem getrennten Administrationsnetz möglich?
+        en: Is node administration possible only from a separate administration network?
+  - id: SYS.1.6.A6
+    module: SYS.1.6
+    level: basic
+    title:
+      de: Sichere Images verwenden
+      en: Use secure images
+    summary:
+      de: >-
+        Images nur aus vertrauenswürdigen Quellen beziehen, deren Ersteller
+        eindeutig feststeht und die Sicherheitslücken nachweislich prüfen und
+        beheben. Keine abgekündigten Basis-Images, eindeutige
+        Versionsnummern, neuere Versionen im Patchmanagement bewerten.
+      en: >-
+        Take images only from trusted sources with a clearly identified
+        creator that verifiably check and fix vulnerabilities. No deprecated
+        base images, unambiguous version numbers, and newer versions assessed
+        in patch management.
+    source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 6}
+    coverage_type: partial
+    checks:
+      - images.latest_tag
+      - images.registry_not_allowed
+    questions:
+      - de: Nach welchen Kriterien gilt eine Image-Quelle als vertrauenswürdig, und entspricht die Registry-Freigabeliste dieser Einstufung?
+        en: By which criteria is an image source considered trusted, and does the registry allowlist reflect that classification?
+      - de: Wie wird erkannt, dass ein Basis-Image abgekündigt ist oder eine neuere Version vorliegt?
+        en: How is it detected that a base image is deprecated or that a newer version exists?
+  - id: SYS.1.6.A7
+    module: SYS.1.6
+    level: basic
+    title:
+      de: Container-Protokolle außerhalb speichern
+      en: Store container logs outside the container
+    summary:
+      de: >-
+        Protokolldaten der Container außerhalb des Containers ablegen,
+        mindestens auf dem Host.
+      en: >-
+        Store container log data outside the container, at least on the
+        host.
+    source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 6}
+    coverage_type: manual
+    questions:
+      - de: Schreiben die Anwendungen ihre Protokolle auf stdout/stderr oder in Dateien im Container? Werden die Protokolle zentral gesammelt?
+        en: Do the applications log to stdout/stderr or to files inside the container? Are the logs collected centrally?
+  - id: SYS.1.6.A8
+    module: SYS.1.6
+    level: basic
+    title:
+      de: Zugangsdaten sicher ablegen
+      en: Store credentials securely
+    summary:
+      de: >-
+        Zugangsdaten (Passwörter, API-Schlüssel, symmetrische und private
+        Schlüssel) so speichern, dass nur Berechtigte darauf zugreifen:
+        an geschützten Orten, nie in Images, bevorzugt über die
+        Secret-Verwaltung der Plattform.
+      en: >-
+        Store credentials (passwords, API keys, symmetric and private keys) so
+        that only authorized parties can reach them: in protected places,
+        never in images, preferably through the platform's secret management.
+    source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 6}
+    coverage_type: partial
+    checks:
+      - secrets.credential_literal_env
+    questions:
+      - de: Werden Images vor der Freigabe auf eingebettete Zugangsdaten geprüft?
+        en: Are images scanned for embedded credentials before release?
+      - de: Wer darf Secrets in welchen Namespaces lesen?
+        en: Who may read secrets in which namespaces?
+  - id: SYS.1.6.A9
+    module: SYS.1.6
+    level: standard
+    title:
+      de: Container-Tauglichkeit der Anwendung
+      en: Application fit for containers
+    summary:
+      de: >-
+        Nur Anwendungen containerisieren, die dafür geeignet sind und ein
+        unerwartetes Beenden verkraften. Die Bewertung aus SYS.1.6.A3
+        nachvollziehbar dokumentieren.
+      en: >-
+        Containerize only applications that suit it and can cope with being
+        stopped unexpectedly. Document the assessment from SYS.1.6.A3 in a
+        traceable way.
+    source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 7}
+    coverage_type: organizational
+    questions:
+      - de: Wurde für jede containerisierte Anwendung dokumentiert, dass sie ein unerwartetes Beenden verkraftet?
+        en: Was it documented for each containerized application that it copes with unexpected termination?
+  - id: SYS.1.6.A10
+    module: SYS.1.6
+    level: standard
+    title:
+      de: Regeln für Images und Containerbetrieb festlegen
+      en: Set rules for images and container operation
+    summary:
+      de: >-
+        Eine Richtlinie aufstellen und anwenden, die Anforderungen an den
+        Container-Betrieb, die zugelassenen Images sowie deren Betrieb und
+        Bereitstellung festlegt.
+      en: >-
+        Write and apply a policy that sets the rules for running containers,
+        the permitted images and how images are operated and provided.
+    source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 7}
+    coverage_type: organizational
+    questions:
+      - de: Gibt es eine gültige Richtlinie für Images und Container-Betrieb, und wie wird ihre Anwendung überprüft?
+        en: Is there a current policy for images and container operation, and how is its application verified?
+  - id: SYS.1.6.A11
+    module: SYS.1.6
+    level: standard
+    title:
+      de: Ein Dienst je Container
+      en: One service per container
+    summary:
+      de: >-
+        Jeder Container stellt nur einen Dienst bereit.
+      en: >-
+        Each container provides only one service.
+    source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 7}
+    coverage_type: manual
+    questions:
+      - de: Gibt es Container, in denen mehrere Dienste laufen (z. B. über einen Prozessmanager wie supervisord)?
+        en: Are there containers that run several services (e.g. via a process manager such as supervisord)?
+  - id: SYS.1.6.A12
+    module: SYS.1.6
+    level: standard
+    title:
+      de: Sichere Images verteilen
+      en: Distribute secure images
+    summary:
+      de: >-
+        Dokumentieren, welche Image-Quellen als vertrauenswürdig gelten und
+        warum, und wie Images daraus in die Produktion gelangen. Images tragen
+        Metadaten zu Funktion und Historie und sind digital signiert.
+      en: >-
+        Document which image sources are rated trusted and why, and how images
+        get from them into production. Images carry metadata on function and
+        history and are digitally signed.
+    source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 7}
+    coverage_type: organizational
+    questions:
+      - de: Wo ist dokumentiert, welche Image-Quellen vertrauenswürdig sind und warum?
+        en: Where is it documented which image sources are trusted and why?
+      - de: Werden Images signiert, und wird die Signatur vor dem Start geprüft (z. B. cosign mit Admission-Kontrolle)?
+        en: Are images signed, and is the signature verified before start (e.g. cosign with admission control)?
+  - id: SYS.1.6.A13
+    module: SYS.1.6
+    level: standard
+    title:
+      de: Images freigeben
+      en: Release images
+    summary:
+      de: >-
+        Produktive Images durchlaufen wie Software einen Test- und
+        Freigabeprozess nach OPS.1.1.6.
+      en: >-
+        Production images go through a test and release process like any
+        software, following OPS.1.1.6.
+    source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 7}
+    coverage_type: organizational
+    questions:
+      - de: Wie werden Images getestet und freigegeben, bevor sie in Produktion gehen, und wer gibt frei?
+        en: How are images tested and released before they go to production, and who approves them?
+  - id: SYS.1.6.A14
+    module: SYS.1.6
+    level: standard
+    title:
+      de: Images aktualisieren
+      en: Update images
+    summary:
+      de: >-
+        Im Patch- und Änderungsmanagement nach OPS.1.1.3 festlegen, wann und
+        wie aktualisierte Images ausgerollt werden. Bei persistenten
+        Containern im Einzelfall abwägen, ob ein Update statt eines
+        Neuaufbaus besser ist.
+      en: >-
+        Decide in patch and change management (OPS.1.1.3) when and how
+        updated images are rolled out. For persistent containers, weigh case
+        by case whether updating beats rebuilding.
+    source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 7}
+    coverage_type: organizational
+    questions:
+      - de: Wie schnell werden Images nach sicherheitsrelevanten Updates neu gebaut und ausgerollt?
+        en: How quickly are images rebuilt and rolled out after security-relevant updates?
+  - id: SYS.1.6.A15
+    module: SYS.1.6
+    level: standard
+    title:
+      de: Ressourcen je Container begrenzen
+      en: Limit resources per container
+    summary:
+      de: >-
+        Für jeden Container CPU, Arbeits- und Festspeicher sowie
+        Netzbandbreite angemessen reservieren und begrenzen. Festlegen und
+        dokumentieren, was bei Überschreitung geschieht.
+      en: >-
+        Reserve and limit CPU, memory, storage and network bandwidth for every
+        container. Define and document what happens when a limit is
+        exceeded.
+    source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 7}
+    coverage_type: partial
+    checks:
+      - workload.resource_limits_missing
+    questions:
+      - de: Sind Requests, Festspeicher und Netzbandbreite begrenzt (z. B. ResourceQuota, LimitRange, ephemeral-storage)?
+        en: Are requests, storage and network bandwidth limited (e.g. ResourceQuota, LimitRange, ephemeral-storage)?
+      - de: Ist dokumentiert, wie sich das System bei Überschreitung der Grenzen verhält (Drosselung, OOM-Kill, Eviction)?
+        en: Is it documented how the system behaves when limits are exceeded (throttling, OOM kill, eviction)?
+  - id: SYS.1.6.A16
+    module: SYS.1.6
+    level: standard
+    title:
+      de: Admin-Zugriffe zwischen Container und Host
+      en: Admin access between container and host
+    summary:
+      de: >-
+        Administrative Zugriffe zwischen Container und Host wie Fernzugriffe
+        behandeln. Aus Containern nicht auf den Host administrieren, keine
+        Fernwartungszugänge in Anwendungscontainern; Administration nur über
+        die Runtime.
+      en: >-
+        Treat administrative access between container and host like remote
+        access. Do not administer the host from a container, no remote
+        maintenance access inside application containers; administer only
+        through the runtime.
+    source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 7}
+    coverage_type: manual
+    questions:
+      - de: Enthalten Anwendungscontainer SSH-Server oder andere Fernwartungszugänge?
+        en: Do application containers contain SSH servers or other remote maintenance access?
+      - de: Wer darf kubectl exec nutzen, und wird das protokolliert?
+        en: Who may use kubectl exec, and is it logged?
+  - id: SYS.1.6.A17
+    module: SYS.1.6
+    level: standard
+    title:
+      de: Container ohne Privilegien ausführen
+      en: Run containers without privileges
+    summary:
+      de: >-
+        Runtime und Container unter einem Account ohne erweiterte Rechte
+        betreiben, der solche Rechte auch nicht erlangen kann; die Runtime
+        zusätzlich kapseln. Übernehmen Container ausnahmsweise Host-Aufgaben,
+        Rechte auf das Minimum beschränken und die Ausnahme dokumentieren.
+      en: >-
+        Run the runtime and containers under an account without extended
+        rights that also cannot gain them; additionally encapsulate the
+        runtime. If containers exceptionally take on host tasks, keep their
+        privileges minimal and document the exception.
+    source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 8}
+    coverage_type: partial
+    checks:
+      - workload.privileged
+      - workload.privilege_escalation
+      - workload.added_capabilities
+      - workload.run_as_root
+    questions:
+      - de: Läuft die Container-Runtime ohne root-Rechte (rootless) oder zusätzlich gekapselt, z. B. mit gVisor oder Kata Containers?
+        en: Does the container runtime run without root (rootless) or with extra encapsulation, e.g. gVisor or Kata Containers?
+      - de: Sind privilegierte Ausnahmen (z. B. CNI- oder Monitoring-Agenten) dokumentiert und begründet?
+        en: Are privileged exceptions (e.g. CNI or monitoring agents) documented and justified?
+  - id: SYS.1.6.A18
+    module: SYS.1.6
+    level: standard
+    title:
+      de: Host-Rechte von Container-Accounts
+      en: Host rights of container accounts
+    summary:
+      de: >-
+        System-Accounts im Container haben keine Rechte auf dem Host. Wo das
+        betrieblich nötig ist, nur für die nötigen Daten und Zugriffe; der
+        dafür genutzte Account ist auf dem Host bekannt.
+      en: >-
+        System accounts inside a container have no rights on the host. Where
+        operations require it, only for the data and access needed, and the
+        account used is known on the host.
+    source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 8}
+    coverage_type: manual
+    questions:
+      - de: Welche Container brauchen Zugriff auf Host-Ressourcen, und unter welcher UID laufen sie dort?
+        en: Which containers need access to host resources, and under which UID do they run there?
+  - id: SYS.1.6.A19
+    module: SYS.1.6
+    level: standard
+    title:
+      de: Datenspeicher in Container einbinden
+      en: Mount storage into containers
+    summary:
+      de: >-
+        Container erreichen nur die Speicher und Verzeichnisse, die sie für
+        den Betrieb brauchen; Rechte nur ausdrücklich vergeben. Lokalen
+        Speicher auf den Service-Account des Containers beschränken,
+        Rechte für Netzspeicher auf dem Netzspeicher selbst setzen.
+      en: >-
+        Containers reach only the storage and directories they need for
+        operation; grant permissions only explicitly. Restrict local storage
+        to the container's service account, and set permissions for network
+        storage on the network storage itself.
+    source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 8}
+    coverage_type: partial
+    checks:
+      - workload.host_path
+    questions:
+      - de: Ist jeder hostPath-Mount betrieblich nötig, und ist er wo möglich nur lesend eingebunden?
+        en: Is every hostPath mount operationally needed, and is it mounted read-only where possible?
+      - de: Wie sind die Zugriffsrechte auf Netzspeicher (NFS, CSI-Volumes) gesetzt?
+        en: How are access permissions on network storage (NFS, CSI volumes) set?
+  - id: SYS.1.6.A20
+    module: SYS.1.6
+    level: standard
+    title:
+      de: Konfigurationsdaten absichern
+      en: Protect configuration data
+    summary:
+      de: >-
+        Container-Konfigurationen versioniert beschreiben und Änderungen
+        nachvollziehbar dokumentieren.
+      en: >-
+        Keep container configuration descriptions under version control and
+        document changes in a traceable way.
+    source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 8}
+    coverage_type: organizational
+    questions:
+      - de: Liegen alle Manifeste und Helm-Werte versioniert vor, und ist jede Änderung einem Ticket oder Review zugeordnet?
+        en: Are all manifests and Helm values under version control, and is every change linked to a ticket or review?
+  - id: SYS.1.6.A21
+    module: SYS.1.6
+    level: elevated
+    title:
+      de: Container per MAC-Richtlinien einschränken
+      en: Restrict containers with MAC policies
+    summary:
+      de: >-
+        Rechte der Container über erweiterte Richtlinien einschränken, per
+        Mandatory Access Control oder Vergleichbarem erzwungen: mindestens
+        Netzverbindungen, Dateisystemzugriffe und Syscalls. Der Host-Kernel
+        verhindert oder meldet alles, was die Richtlinie nicht erlaubt.
+      en: >-
+        Restrict container rights through extended policies, enforced by
+        mandatory access control or similar: at least network connections,
+        file system access and syscalls. The host kernel blocks, or at least
+        reports, anything the policy does not allow.
+    source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 8}
+    coverage_type: partial
+    checks:
+      - workload.seccomp_missing
+    questions:
+      - de: Sind AppArmor- oder SELinux-Profile für die Container aktiv, und wie werden Verstöße gemeldet?
+        en: Are AppArmor or SELinux profiles active for the containers, and how are violations reported?
+  - id: SYS.1.6.A22
+    module: SYS.1.6
+    level: elevated
+    title:
+      de: Für forensische Untersuchungen vorsorgen
+      en: Prepare for forensic analysis
+    summary:
+      de: >-
+        Nach festgelegten Regeln Abbilder des Container-Zustands erstellen,
+        damit Container später untersucht werden können.
+      en: >-
+        Create snapshots of container state according to defined rules so
+        that containers can be analysed later.
+    source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 8}
+    coverage_type: organizational
+    questions:
+      - de: Gibt es Regeln, wann und wie der Zustand eines Containers für eine Untersuchung gesichert wird?
+        en: Are there rules on when and how a container's state is preserved for analysis?
+  - id: SYS.1.6.A23
+    module: SYS.1.6
+    level: elevated
+    title:
+      de: Unveränderliche Container
+      en: Immutable containers
+    summary:
+      de: >-
+        Container können ihr Dateisystem zur Laufzeit nicht verändern;
+        Dateisysteme werden ohne Schreibrechte eingebunden.
+      en: >-
+        Containers cannot change their file system at runtime; file systems
+        are mounted without write access.
+    source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 9}
+    coverage_type: partial
+    checks:
+      - workload.writable_root_fs
+    questions:
+      - de: Welche beschreibbaren Volumes (z. B. emptyDir, Persistent Volumes) sind eingebunden, und sind sie nötig?
+        en: Which writable volumes (e.g. emptyDir, persistent volumes) are mounted, and are they needed?
+  - id: SYS.1.6.A24
+    module: SYS.1.6
+    level: elevated
+    title:
+      de: Container-Verhalten auf Angriffe überwachen
+      en: Monitor container behaviour for attacks
+    summary:
+      de: >-
+        Verhalten von Containern und Anwendungen überwachen (mindestens
+        Netzverbindungen, Prozesse, Dateizugriffe, Syscalls) und
+        Auffälligkeiten an das zentrale Sicherheitsvorfallmanagement melden.
+      en: >-
+        Monitor the behaviour of containers and applications (at least network
+        connections, processes, file access, syscalls) and report anomalies
+        to central security incident handling.
+    source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 9}
+    coverage_type: manual
+    questions:
+      - de: Ist eine Laufzeitüberwachung im Einsatz (z. B. Falco, Tetragon), und wohin gehen ihre Meldungen?
+        en: Is runtime monitoring in use (e.g. Falco, Tetragon), and where do its alerts go?
+  - id: SYS.1.6.A25
+    module: SYS.1.6
+    level: elevated
+    title:
+      de: Verfügbarkeitsebene für Container-Anwendungen festlegen
+      en: Decide the availability level for container applications
+    summary:
+      de: >-
+        Bei hohen Verfügbarkeitsanforderungen festlegen, auf welcher Ebene
+        die Verfügbarkeit hergestellt wird, z. B. redundante Hosts.
+      en: >-
+        With high availability requirements, decide at which level
+        availability is provided, e.g. redundant hosts.
+    source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 9}
+    coverage_type: organizational
+    questions:
+      - de: Auf welcher Ebene wird die Verfügbarkeit hochverfügbarer Anwendungen hergestellt (Replikate, Nodes, Zonen)?
+        en: At which level is availability of highly available applications provided (replicas, nodes, zones)?
+  - id: SYS.1.6.A26
+    module: SYS.1.6
+    level: elevated
+    title:
+      de: Stärkere Isolation von Containern
+      en: Stronger container isolation
+    summary:
+      de: >-
+        Wenn stärkere Isolation nötig ist, Maßnahmen in steigender Wirkung
+        prüfen: feste Zuordnung zu Hosts, Betrieb mit Hypervisor, ein
+        Container je Host.
+      en: >-
+        If stronger isolation is needed, consider measures in increasing
+        strength: fixed assignment to hosts, running under a hypervisor, one
+        container per host.
+    source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 9}
+    coverage_type: organizational
+    questions:
+      - de: Wurde für Anwendungen mit erhöhtem Isolationsbedarf geprüft, ob feste Hosts, Hypervisor-Isolation oder eigene Hosts nötig sind?
+        en: For applications that need stronger isolation, was it assessed whether fixed hosts, hypervisor isolation or dedicated hosts are needed?
+unmapped_checks:
+  - check_id: control_plane.audit_logging
+    reason:
+      de: >-
+        APP.4.4 und SYS.1.6 verlangen keine Audit-Protokollierung des
+        API-Servers. Das Thema gehört zu OPS.1.1.5 Protokollierung, das diese
+        Zuordnung nicht abdeckt.
+      en: >-
+        Neither APP.4.4 nor SYS.1.6 asks for API server audit logging. The
+        topic belongs to OPS.1.1.5 Logging, which this mapping does not
+        cover.
+  - check_id: control_plane.encryption_at_rest
+    reason:
+      de: >-
+        APP.4.4.A20 verlangt verschlüsselte Dateisysteme. Die Prüfung
+        erkennt nur die Verschlüsselung einzelner Ressourcen durch den
+        API-Server; ein Befund belegt also keine Abweichung von A20. Hinweis
+        für A20, nicht Nachweis.
+      en: >-
+        APP.4.4.A20 asks for encrypted file systems. The check only detects
+        encryption of selected resources by the API server, so a finding
+        does not prove a deviation from A20. Supporting information for A20,
+        not evidence.
+  - check_id: control_plane.etcd_listen_non_loopback
+    reason:
+      de: >-
+        APP.4.4.A7 verlangt, dass Verwaltungsports nur aus dem
+        Administrationsnetz erreichbar sind. Die Prüfung sieht nur die
+        Listen-Adresse, keine Firewall-Regeln; ein Befund belegt also keine
+        Abweichung.
+      en: >-
+        APP.4.4.A7 asks that management ports be reachable only from the
+        administration network. The check sees only the listen address, not
+        firewall rules, so a finding does not prove a deviation.
+  - check_id: identity.long_lived_token_secret
+    reason:
+      de: >-
+        Keine Anforderung verlangt kurzlebige Tokens. APP.4.4.A9 fordert
+        eigene Tokens je Automatisierungsprogramm, nicht deren Laufzeit.
+      en: >-
+        No requirement asks for short-lived tokens. APP.4.4.A9 asks for
+        separate tokens per automation program, not for their lifetime.
+  - check_id: images.no_digest
+    reason:
+      de: >-
+        SYS.1.6.A6 verlangt eindeutige Versionsnummern; das deckt
+        images.latest_tag ab. SYS.1.6.A12 verlangt Signaturen, die ein Digest
+        nicht belegt. Digest-Pinning selbst fordert keine Anforderung.
+      en: >-
+        SYS.1.6.A6 asks for unambiguous version numbers, covered by
+        images.latest_tag. SYS.1.6.A12 asks for signatures, which a digest
+        does not prove. No requirement asks for digest pinning itself.
+  - check_id: isolation.psa_labels_missing
+    reason:
+      de: >-
+        Keine Anforderung nennt Pod Security Admission. APP.4.4.A13 verlangt
+        die Durchsetzung von Regeln mit geeigneten Werkzeugen; dafür kommen
+        auch andere Admission-Werkzeuge oder clusterweite Vorgaben in Frage,
+        die die Prüfung nicht sieht.
+      en: >-
+        No requirement names Pod Security Admission. APP.4.4.A13 asks for
+        rules to be enforced with suitable tools; other admission tools or
+        cluster-wide defaults, which the check cannot see, also qualify.
+  - check_id: secrets.env_secret_ref
+    reason:
+      de: >-
+        SYS.1.6.A8 verlangt die Nutzung der Secret-Verwaltung der Plattform;
+        ein Secret als Umgebungsvariable nutzt sie. Die Einbindung als Datei
+        ist eine Härtungsempfehlung über die Anforderung hinaus.
+      en: >-
+        SYS.1.6.A8 asks for use of the platform's secret management; a secret
+        consumed as an environment variable does use it. Mounting it as a file
+        is a hardening recommendation beyond the requirement.
+  - check_id: version.unsupported
+    reason:
+      de: >-
+        APP.4.4 und SYS.1.6 verlangen keine unterstützte Kubernetes-Version.
+        Aktualisierungen regelt OPS.1.1.3 Patch- und Änderungsmanagement, das
+        diese Zuordnung nicht abdeckt.
+      en: >-
+        Neither APP.4.4 nor SYS.1.6 asks for a supported Kubernetes version.
+        Updates are governed by OPS.1.1.3 Patch and change management, which
+        this mapping does not cover.
+  - check_id: workload.run_as_non_root_missing
+    reason:
+      de: >-
+        Die Prüfung zeigt nur, dass Nicht-root nicht erzwungen ist; der
+        tatsächliche Benutzer hängt vom Image ab, das nicht geprüft wird. Ein
+        Befund belegt also keine Abweichung von SYS.1.6.A17; die
+        nachgewiesene root-Ausführung deckt workload.run_as_root ab.
+      en: >-
+        The check only shows that non-root is not enforced; the actual user
+        depends on the image, which is not inspected. A finding therefore
+        does not prove a deviation from SYS.1.6.A17; confirmed root execution
+        is covered by workload.run_as_root.
