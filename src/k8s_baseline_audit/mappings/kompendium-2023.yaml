@@ -98,9 +98,7 @@ requirements:
         Linux namespaces and cgroups), covering at least process and user IDs,
         inter-process communication, file system, network and hostname.
     source: {document: "APP.4.4 Kubernetes", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/06_APP_Anwendungen/APP_4_4_Kubernetes_Edition_2023.pdf?__blob=publicationFile&v=4", page: 5}
-    coverage_type: partial
-    checks:
-      - workload.host_namespaces
+    coverage_type: manual
     questions:
       - de: Welche Pods nutzen Host-Netz, Host-PID oder Host-IPC, und ist das für jeden dieser Pods begründet?
         en: Which pods use the host network, host PID or host IPC, and is each case justified?
@@ -227,7 +225,6 @@ requirements:
     coverage_type: partial
     checks:
       - identity.default_service_account
-      - identity.automount_token
     questions:
       - de: Welche der Pods mit eingebundenem Token greifen tatsächlich auf die Kubernetes-API zu?
         en: Which of the pods with a mounted token actually access the Kubernetes API?
@@ -310,7 +307,7 @@ requirements:
         pods against a list of allowed values and against recognized
         benchmarks, and enforce the rules in the cluster with suitable tools.
     source: {document: "APP.4.4 Kubernetes", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/06_APP_Anwendungen/APP_4_4_Kubernetes_Edition_2023.pdf?__blob=publicationFile&v=4", page: 6}
-    coverage_type: organizational
+    coverage_type: manual
     questions:
       - de: Läuft ein regelmäßiges, automatisches Audit (z. B. CIS-Benchmark), und wer wertet die Ergebnisse aus?
         en: Is there a regular automated audit (e.g. CIS benchmark), and who evaluates the results?
@@ -450,11 +447,13 @@ requirements:
       en: Encrypt persistent data
     summary:
       de: >-
-        Dateisysteme mit persistenten Daten der Control Plane, vor allem etcd,
-        und der Anwendungen verschlüsseln.
+        Alles, was Control Plane und Anwendungen dauerhaft ablegen,
+        etcd an erster Stelle, liegt nur auf verschlüsselten
+        Datenträgern.
       en: >-
-        Encrypt the file systems holding persistent data of the control
-        plane, especially etcd, and of the applications.
+        Everything the control plane and the applications store
+        permanently, etcd first of all, sits only on encrypted
+        storage.
     source: {document: "APP.4.4 Kubernetes", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/06_APP_Anwendungen/APP_4_4_Kubernetes_Edition_2023.pdf?__blob=publicationFile&v=4", page: 7}
     coverage_type: manual
     questions:
@@ -532,8 +531,8 @@ requirements:
     summary:
       de: >-
         Auswirkungen der Containerisierung auf Systeme und Anwendungen
-        bewerten. Anhand des Schutzbedarfs prüfen, ob Isolation und Kapselung
-        von Containern und virtuellen Netzen ausreichen; Overlay-Netze
+        bewerten. Anhand des Schutzbedarfs prüfen, ob Container und virtuelle
+        Netze ausreichend voneinander abgeschottet sind; Overlay-Netze
         modellieren, Verfügbarkeit und Durchsatz sichern und den Zustand im
         Betrieb überwachen.
       en: >-
@@ -599,7 +598,7 @@ requirements:
       en: Use secure images
     summary:
       de: >-
-        Images nur aus vertrauenswürdigen Quellen beziehen, deren Ersteller
+        Images ausschließlich von geprüften Anbietern beziehen, deren Ersteller
         eindeutig feststeht und die Sicherheitslücken nachweislich prüfen und
         beheben. Keine abgekündigten Basis-Images, eindeutige
         Versionsnummern, neuere Versionen im Patchmanagement bewerten.
@@ -626,11 +625,11 @@ requirements:
       en: Store container logs outside the container
     summary:
       de: >-
-        Protokolldaten der Container außerhalb des Containers ablegen,
-        mindestens auf dem Host.
+        Logs dürfen nicht allein im Container liegen, sonst gehen sie
+        mit ihm verloren; als Minimum sammelt sie der Host.
       en: >-
-        Store container log data outside the container, at least on the
-        host.
+        Logs must not live only inside the container, or they vanish
+        with it; at minimum the host collects them.
     source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 6}
     coverage_type: manual
     questions:
@@ -708,9 +707,11 @@ requirements:
       en: One service per container
     summary:
       de: >-
-        Jeder Container stellt nur einen Dienst bereit.
+        Pro Container läuft genau eine Aufgabe; mehrere Dienste werden
+        auf getrennte Container verteilt.
       en: >-
-        Each container provides only one service.
+        Each container does exactly one job; several services are
+        split across separate containers.
     source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 7}
     coverage_type: manual
     questions:
@@ -746,11 +747,13 @@ requirements:
       en: Release images
     summary:
       de: >-
-        Produktive Images durchlaufen wie Software einen Test- und
-        Freigabeprozess nach OPS.1.1.6.
+        Ein Image kommt erst in Produktion, wenn es getestet und
+        formal abgenommen ist, mit demselben Verfahren wie andere
+        Software (siehe OPS.1.1.6).
       en: >-
-        Production images go through a test and release process like any
-        software, following OPS.1.1.6.
+        An image reaches production only after testing and formal
+        approval, using the same procedure as other software (see
+        OPS.1.1.6).
     source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 7}
     coverage_type: organizational
     questions:
@@ -765,8 +768,8 @@ requirements:
     summary:
       de: >-
         Im Patch- und Änderungsmanagement nach OPS.1.1.3 festlegen, wann und
-        wie aktualisierte Images ausgerollt werden. Bei persistenten
-        Containern im Einzelfall abwägen, ob ein Update statt eines
+        auf welchem Weg neue Image-Versionen in Betrieb gehen. Bei
+        langlebigen Containern im Einzelfall abwägen, ob ein Update statt eines
         Neuaufbaus besser ist.
       en: >-
         Decide in patch and change management (OPS.1.1.3) when and how
@@ -883,8 +886,9 @@ requirements:
     summary:
       de: >-
         Container erreichen nur die Speicher und Verzeichnisse, die sie für
-        den Betrieb brauchen; Rechte nur ausdrücklich vergeben. Lokalen
-        Speicher auf den Service-Account des Containers beschränken,
+        den Betrieb brauchen; Rechte nur ausdrücklich vergeben. Lokal
+        eingebundener Speicher ist nur für das Konto zugänglich, unter dem
+        der Container läuft;
         Rechte für Netzspeicher auf dem Netzspeicher selbst setzen.
       en: >-
         Containers reach only the storage and directories they need for
@@ -892,9 +896,7 @@ requirements:
         to the container's service account, and set permissions for network
         storage on the network storage itself.
     source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 8}
-    coverage_type: partial
-    checks:
-      - workload.host_path
+    coverage_type: manual
     questions:
       - de: Ist jeder hostPath-Mount betrieblich nötig, und ist er wo möglich nur lesend eingebunden?
         en: Is every hostPath mount operationally needed, and is it mounted read-only where possible?
@@ -968,11 +970,11 @@ requirements:
       en: Immutable containers
     summary:
       de: >-
-        Container können ihr Dateisystem zur Laufzeit nicht verändern;
-        Dateisysteme werden ohne Schreibrechte eingebunden.
+        Laufende Container bleiben unverändert: Mounts sind nur
+        lesbar, Schreiben ins eigene Dateisystem ist ausgeschlossen.
       en: >-
-        Containers cannot change their file system at runtime; file systems
-        are mounted without write access.
+        Running containers stay unchanged: mounts are read-only and
+        writing to their own file system is impossible.
     source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 9}
     coverage_type: partial
     checks:
@@ -1008,11 +1010,13 @@ requirements:
       en: Decide the availability level for container applications
     summary:
       de: >-
-        Bei hohen Verfügbarkeitsanforderungen festlegen, auf welcher Ebene
-        die Verfügbarkeit hergestellt wird, z. B. redundante Hosts.
+        Wo Container-Anwendungen hochverfügbar sein müssen, bewusst
+        entscheiden, ob die Redundanz über Hosts oder eine andere
+        Schicht entsteht.
       en: >-
-        With high availability requirements, decide at which level
-        availability is provided, e.g. redundant hosts.
+        Where container applications must be highly available, decide
+        deliberately whether redundancy comes from hosts or another
+        layer.
     source: {document: "SYS.1.6 Containerisierung", edition: "2023", url: "https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/IT-GS-Kompendium_Einzel_PDFs_2023/07_SYS_IT_Systeme/SYS_1_6_Containerisierung_Edition_2023.pdf?__blob=publicationFile&v=4", page: 9}
     coverage_type: organizational
     questions:
@@ -1072,6 +1076,16 @@ unmapped_checks:
         APP.4.4.A7 asks that management ports be reachable only from the
         administration network. The check sees only the listen address, not
         firewall rules, so a finding does not prove a deviation.
+  - check_id: identity.automount_token
+    reason:
+      de: >-
+        APP.4.4.A9 gilt nur für Pods, die keinen Service-Account brauchen.
+        Ob ein Pod die API braucht (z. B. Operatoren, Ingress-Controller),
+        sieht die Prüfung nicht; ein Befund belegt also keine Abweichung.
+      en: >-
+        APP.4.4.A9 applies only to pods that do not need a service account.
+        The check cannot tell whether a pod needs the API (e.g. operators,
+        ingress controllers), so a finding does not prove a deviation.
   - check_id: identity.long_lived_token_secret
     reason:
       de: >-
@@ -1121,6 +1135,26 @@ unmapped_checks:
         Neither APP.4.4 nor SYS.1.6 asks for a supported Kubernetes version.
         Updates are governed by OPS.1.1.3 Patch and change management, which
         this mapping does not cover.
+  - check_id: workload.host_namespaces
+    reason:
+      de: >-
+        APP.4.4.A4 verlangt, dass der Kernel der Nodes Pods isolieren kann.
+        Ein einzelner Pod, der Host-Namespaces nutzt, sagt über diese
+        Fähigkeit der Nodes nichts aus.
+      en: >-
+        APP.4.4.A4 asks that the node kernel be able to isolate pods. A single
+        pod that uses host namespaces says nothing about that capability of
+        the nodes.
+  - check_id: workload.host_path
+    reason:
+      de: >-
+        SYS.1.6.A19 erlaubt die für den Betrieb nötigen Verzeichnisse.
+        hostPath ist für CSI- und CNI-Treiber, Log-Sammler und statische Pods
+        regelmäßig nötig; ein Befund belegt also keine Abweichung.
+      en: >-
+        SYS.1.6.A19 allows the directories needed for operation. hostPath is
+        routinely needed by CSI and CNI drivers, log shippers and static pods,
+        so a finding does not prove a deviation.
   - check_id: workload.run_as_non_root_missing
     reason:
       de: >-

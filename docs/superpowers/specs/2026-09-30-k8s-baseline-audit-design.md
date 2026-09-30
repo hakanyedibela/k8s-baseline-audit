@@ -369,7 +369,11 @@ with source).
   catalogue "löst das IT-Grundschutz-Kompendium ab", but dates certifiability
   later: "1. Januar 2027 — Der GS++ ist zertifizierbar". Pilot phase ran
   1 April to 31 August 2026; publication of the method is planned for
-  27 October 2026 (it-sa).
+  27 October 2026 (it-sa). The same plan names the end date of the current
+  scheme: "30. November 2031 — Ende der Zertifizierbarkeit IT-Grundschutz"
+  ("Die Zertifizierbarkeit des IT-Grundschutz endet (fünf Jahre nach
+  Veröffentlichung des GS++)."). Source: same Grundschutz++ page, milestone
+  table.
   URL: https://www.bsi.bund.de/DE/Themen/Unternehmen-und-Organisationen/Standards-und-Zertifizierung/Grundschutz-in-der-Informationssicherheit/Grundschutz-Plus-Plus/grundschutz-plus-plus_node.html
 
 Consequence: the v1 mapping `kompendium-2023` targets the current audit basis.
@@ -388,6 +392,13 @@ https://www.bsi.bund.de/DE/Service/Nutzungsbedingungen/Nutzungsbedingungen_node.
 - "Eine kommerzielle Verwendung von Inhalten, insbesondere denen des
   IT-Grundschutzes, bedarf einer lizenzrechtlichen Vereinbarung mit dem BSI."
   Contact named there: it-grundschutz@bsi.bund.de.
+- Section II (Download): "Software und Veröffentlichungen, die zum
+  kostenfreien Download angeboten werden, dürfen nur zu nicht kommerziellen
+  Zwecken verwendet werden. Eine weitergehende, insbesondere kommerzielle oder
+  publizistische Verwendung bedarf der vorherigen Zustimmung durch das BSI."
+  This applies to the module PDFs themselves. They are never shipped, but
+  reading them to build a commercially used mapping may already count as
+  commercial use; this is part of the open item below.
 - Quoting is allowed without consent if verbatim, in quotation marks, with
   source.
 - No use may suggest a cooperation with the BSI. "Die Verwendung des Namens
