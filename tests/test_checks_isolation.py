@@ -209,3 +209,62 @@ def test_system_namespaces_excluded():
         [h.resource.key().split("/")[-1] for h in hits]
     )
     assert hit_namespaces == ["app-ns", "default"]
+
+
+def test_allow_all_policy_labelled_namespace_selector():
+    """Labelled namespaceSelector (matchLabels/matchExpressions) must not be flagged."""
+    policies = [
+        # Flagged: bare empty namespaceSelector
+        np(
+            "a1",
+            "bare-ns",
+            {"podSelector": {}, "ingress": [{"from": [{"namespaceSelector": {}}]}]},
+        ),
+        # Not flagged: namespaceSelector with matchLabels
+        np(
+            "b1",
+            "ns-with-labels",
+            {
+                "podSelector": {},
+                "ingress": [
+                    {"from": [{"namespaceSelector": {"matchLabels": {"team": "a"}}}]}
+                ],
+            },
+        ),
+        # Not flagged: namespaceSelector with matchExpressions
+        np(
+            "b2",
+            "ns-with-expressions",
+            {
+                "podSelector": {},
+                "ingress": [
+                    {
+                        "from": [
+                            {
+                                "namespaceSelector": {
+                                    "matchExpressions": [
+                                        {"key": "env", "operator": "In", "values": ["prod"]}
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                ],
+            },
+        ),
+    ]
+    hits = run_check("isolation.allow_all_policy", ctx(networkpolicies=policies))
+    hit_keys = [h.evidence.json_path for h in hits]
+    assert hit_keys == ["$.items[0].spec.ingress[0]"]
+
+
+def test_allow_all_policy_with_null_rule():
+    """Ingress rule that is None should not crash."""
+    policies = [
+        np("a", "with-null", {"podSelector": {}, "ingress": [None]}),
+        np("b", "with-empty", {"podSelector": {}, "ingress": [{}]}),
+    ]
+    hits = run_check("isolation.allow_all_policy", ctx(networkpolicies=policies))
+    hit_keys = [h.evidence.json_path for h in hits]
+    # Only the empty dict should be flagged, not the None
+    assert hit_keys == ["$.items[1].spec.ingress[0]"]

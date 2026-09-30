@@ -90,8 +90,12 @@ def no_default_deny(ctx: CheckContext) -> list[Hit]:
     ]
 
 
-def _is_allow_all_ingress_rule(rule: dict) -> bool:
+def _is_allow_all_ingress_rule(rule: dict | None) -> bool:
     """Check if a rule allows all ingress traffic."""
+    # Skip non-dict rules (e.g., None)
+    if not isinstance(rule, dict):
+        return False
+
     # Rule has no 'from' key or 'from' is empty/None
     from_peers = rule.get("from")
     if not from_peers:
@@ -106,8 +110,8 @@ def _is_allow_all_ingress_rule(rule: dict) -> bool:
         if cidr in ("0.0.0.0/0", "::/0"):
             return True
 
-        # Check for bare namespaceSelector (no podSelector key)
-        if "namespaceSelector" in peer and "podSelector" not in peer:
+        # Check for EXACTLY {"namespaceSelector": {}} (empty with no other keys)
+        if peer == {"namespaceSelector": {}}:
             return True
 
     return False
