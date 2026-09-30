@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Literal
 
-from ..bundle import Bundle, dump_json
+from ..bundle import Bundle, BundleFormatError, dump_json
 from ..mapping.schema import Mapping
 from ..models import CoverageEntry, Finding, Source, finding_id
 from .checks import all_checks
@@ -38,9 +38,12 @@ def load_resources(bundle: Bundle) -> dict[str, list[dict]]:
     for rel in bundle.files_under("resources/"):
         kind = rel.removeprefix("resources/").removesuffix(".json")
         doc = bundle.read_json(rel)
-        out[kind] = (
-            doc["items"] if isinstance(doc, dict) and isinstance(doc.get("items"), list) else [doc]
-        )
+        if kind == "version":
+            out[kind] = [doc]
+            continue
+        if not isinstance(doc, dict) or not isinstance(doc.get("items"), list):
+            raise BundleFormatError(f"{rel}: expected a kubectl List with an items array")
+        out[kind] = doc["items"]
     return out
 
 
@@ -92,7 +95,10 @@ def analyze(
     bundle: Bundle, mapping: Mapping, config: AnalyzerConfig, tool_version: str
 ) -> AnalysisResult:
     resources = load_resources(bundle)
-    errors = {e.get("resource"): e.get("reason") for e in bundle.errors}
+    raw_errors = bundle.errors
+    if not all(isinstance(e, dict) for e in raw_errors):
+        raise BundleFormatError("errors.json entries must be objects")
+    errors = {e.get("resource"): e.get("reason") for e in raw_errors}
     builtin, runs = _run_checks(resources, config, mapping, errors)
 
     scanner: list[Finding] = []

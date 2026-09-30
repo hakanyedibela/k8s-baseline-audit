@@ -1,9 +1,11 @@
 import json
 from datetime import date
 
+import pytest
+
 from k8s_baseline_audit.analyze.checks.base import AnalyzerConfig
 from k8s_baseline_audit.analyze.pipeline import analyze, load_resources, write_analysis
-from k8s_baseline_audit.bundle import load_bundle
+from k8s_baseline_audit.bundle import BundleFormatError, load_bundle
 from k8s_baseline_audit.mapping.schema import load_mapping
 from k8s_baseline_audit.models import CoverageStatus
 
@@ -105,3 +107,68 @@ def test_scanner_files_are_parsed_and_merged(sample_bundle, tmp_path):
     priv = [f for f in result.findings if f.check_id == "workload.privileged"]
     assert len(priv) == 1
     assert [s.value for s in priv[0].sources] == ["built-in", "trivy"]
+
+
+def _bundle_with(tmp_path, sample_bundle, overrides):
+    from k8s_baseline_audit.bundle import dump_json, write_bundle
+
+    b = load_bundle(sample_bundle)
+    files = {rel: b.read_bytes(rel) for rel in b.manifest["files"]}
+    for rel, doc in overrides.items():
+        if doc is None:
+            files.pop(rel, None)
+        else:
+            files[rel] = dump_json(doc)
+    manifest = {k: v for k, v in b.manifest.items() if k not in ("files", "schema")}
+    return write_bundle(tmp_path / "variant", files, manifest)
+
+
+@pytest.mark.parametrize("doc", [{}, {"items": None}, [], {"items": {}}])
+def test_malformed_resource_file_raises(sample_bundle, tmp_path, doc):
+    root = _bundle_with(tmp_path, sample_bundle, {"resources/pods.json": doc})
+    with pytest.raises(BundleFormatError, match="expected a kubectl List"):
+        _run(root)
+
+
+def test_non_object_error_entries_raise(sample_bundle, tmp_path):
+    root = _bundle_with(tmp_path, sample_bundle, {"errors.json": {"errors": ["oops"]}})
+    with pytest.raises(BundleFormatError, match="entries must be objects"):
+        _run(root)
+
+
+def test_not_run_checks_never_yield_no_deviation(sample_bundle, tmp_path):
+    # The sample bundle lacks secrets (forbidden), but the real mapping maps no requirement to that
+    # check; also drop network policies and nodes so mapped checks are not run.
+    errors = {
+        "errors": [
+            {"resource": "secrets", "reason": "forbidden: list secrets"},
+            {"resource": "networkpolicies", "reason": "forbidden: list networkpolicies"},
+            {"resource": "nodes", "reason": "forbidden: list nodes"},
+        ]
+    }
+    root = _bundle_with(
+        tmp_path,
+        sample_bundle,
+        {
+            "resources/networkpolicies.json": None,
+            "resources/nodes.json": None,
+            "errors.json": errors,
+        },
+    )
+    result = _run(root)
+    runs = {r.check_id: r for r in result.runs}
+    cov = {c.requirement_id: c for c in result.coverage}
+    not_run = {cid for cid, r in runs.items() if r.state == "not_run"}
+    assert "identity.long_lived_token_secret" in not_run
+    checked = 0
+    for req in load_mapping().requirements:
+        if not set(req.checks) & not_run:
+            continue
+        entry = cov[req.id]
+        if entry.finding_ids:
+            assert entry.status == CoverageStatus.DEVIATION
+            continue
+        checked += 1
+        assert entry.status == CoverageStatus.NOT_CHECKED
+        assert any("forbidden" in reason for reason in entry.reasons)
+    assert checked > 0
