@@ -304,3 +304,45 @@ detection, cloud IAM checks, OpenShift-specific checks.
 3. Verify the trivy flag that disables node-collector Jobs.
 4. Extract all APP.4.4 and SYS.1.6 requirement IDs from the official module
    documents.
+
+## 15. Amendments (2026-09-30, found while writing the implementation plan)
+
+Each change keeps the approved design goals. Reasons are given so a reviewer
+can reject any single one.
+
+1. **Portability to other agents.** The skill follows the Agent Skills open
+   standard: a `SKILL.md` with only `name` and `description` frontmatter and
+   no agent-specific tool names. All logic lives in the pip-installable CLI, so
+   any agent that can run shell commands can use it. An install script copies
+   the skill into the skill folder of Claude Code, Cursor, GitHub Copilot and,
+   where their paths are verified, Codex CLI and Gemini CLI. Bolt is out of
+   scope: it runs in a browser sandbox and cannot reach a client cluster.
+2. **Secrets wording corrected.** The Kubernetes API returns full Secret
+   objects to kubectl even when kubectl prints only names. Correct statement:
+   secret values pass through kubectl's memory and are **never written** to the
+   bundle. Listing secrets therefore needs `list secrets` permission. If it is
+   forbidden, the dependent checks become `not checked`.
+3. **ConfigMaps dropped.** No v1 check uses them. Collecting them only adds
+   data to protect.
+4. **kube-bench is imported, never launched.** The operator runs kube-bench
+   with the upstream Job manifest and passes the result files with
+   `--kube-bench-result NODE=FILE`. The tool itself then never writes to any
+   cluster, in every mode.
+5. **Scanner output is sanitized before it enters the bundle.** kubescape
+   JSON embeds full resource objects, including literal environment values.
+   Trivy embeds manifest snippets and matched secret strings. The collector and
+   the export script strip these fields. Without this step the bundle would
+   leak exactly the data the redaction rules protect.
+6. **The last-applied-configuration annotation is stripped from pods.** It
+   contains the full original manifest, including literal environment values.
+7. **The export script requires jq.** POSIX shell alone cannot redact JSON
+   reliably.
+8. **One localized report template.** A single template plus per-language
+   labels replaces two templates. Parity between German and English then holds
+   by construction instead of by discipline.
+9. **The mapping file ships inside the Python package** at
+   `src/k8s_baseline_audit/mappings/`, so an installed CLI finds it. The file
+   also lists `unmapped_checks` with a reason, so every built-in check is
+   either mapped or explicitly excluded.
+10. **Image vulnerabilities get a compact table** in the report instead of one
+    section per CVE, because trivy can return thousands of them.
