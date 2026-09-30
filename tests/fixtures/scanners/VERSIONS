@@ -1,0 +1,32 @@
+trivy: 0.74.0
+kubescape: 4.0.15
+kube-bench: image docker.io/aquasec/kube-bench:v0.16.0, benchmark cis-1.12 (Controls[0].version), run on kind node image kindest/node:v1.37.0
+
+Verified commands (Task 13 builds the same ones):
+  trivy k8s -q --report all --format json --disable-node-collector --output <file> <context>
+    - the kube context is a POSITIONAL argument; there is no --context flag (unknown flag: --context)
+    - --disable-node-collector exists (skips the node-collector job, which would create resources)
+    - --report all, --format json confirmed
+  kubescape scan --kube-context <context> --format json --output <file>
+    - --kube-context, --format, --output confirmed
+  kube-bench: upstream job.yaml with container args ["run", "--targets", "node", "--json"] added
+    (command stays ["kube-bench"]); output is the Job log, JSON only.
+
+Fixture processing:
+  trivy.json      trimmed with jq to Resources in namespace audit-demo, then sanitize_trivy, then
+                  json.dumps(indent=2, sort_keys=True). Size 1.8 MB, so no further trimming.
+  kubescape.json  full scan (all namespaces), then sanitize_kubescape, same formatting. 1.2 MB.
+  kube-bench-node.json  jq '.' of the Job log, unmodified otherwise.
+
+Format differences found versus the plan text (parsers and hand-written test docs follow these):
+  trivy       IDs are "KSV-0017" (zero-padded, hyphenated), not "KSV017". Field names otherwise as planned.
+  kubescape   resourceID is "<apiGroup>/<version>/<namespace>/<Kind>/<name>" (cluster-scoped objects
+              have an empty namespace segment; RBAC subject wrappers use longer composite IDs).
+              Severity is a per-control string ("Critical|High|Medium|Low") at
+              results[].controls[].severity; there is no numeric scoreFactor use in the parser.
+              resources[].object has two shapes: full manifest (apiVersion/kind/metadata/spec) and a flat
+              wrapper (kind/name/namespace or apiGroup/kind/name, plus relatedObjects). The sanitizer
+              keeps only identity fields of either shape.
+              Captured kubescape.json did not contain the demo secret value even before sanitizing
+              (plan expected > 0).
+  kube-bench  Format matches the plan. Totals: 17 PASS, 2 FAIL, 6 WARN.
