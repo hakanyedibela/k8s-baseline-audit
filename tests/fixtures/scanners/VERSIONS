@@ -13,10 +13,11 @@ Verified commands (Task 13 builds the same ones):
     (command stays ["kube-bench"]); output is the Job log, JSON only.
 
 Fixture processing:
-  trivy.json      trimmed with jq to Resources in namespace audit-demo, then sanitize_trivy, then
+  trivy.json      trimmed with jq to Resources in namespace audit-demo, then sanitize_trivy (also reduces image Metadata to RepoTags/RepoDigests/ImageID/OS), then
                   json.dumps(indent=2, sort_keys=True). Size 1.8 MB, so no further trimming.
   kubescape.json  full scan (all namespaces), then sanitize_kubescape, same formatting. 1.2 MB.
-  kube-bench-node.json  jq '.' of the Job log, unmodified otherwise.
+  kube-bench-node.json  jq + sanitize_kube_bench (drops actual_value, AuditConfig, AuditEnv,
+                  expected_result).
 
 Format differences found versus the plan text (parsers and hand-written test docs follow these):
   trivy       IDs are "KSV-0017" (zero-padded, hyphenated), not "KSV017". Field names otherwise as planned.

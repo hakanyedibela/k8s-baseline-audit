@@ -7,19 +7,18 @@ from ..models import Finding, ResourceRef
 
 # scanner check id -> built-in check id. Every entry was verified against the captured
 # fixtures (trivy 0.74.0, kubescape 4.0.15; see tests/fixtures/scanners/VERSIONS).
-# trivy's host-namespace check KSV-0009 covers hostNetwork only, a subset of the built-in.
+# Host-namespace scanner checks (trivy KSV-0009, kubescape C-0041) cover hostNetwork only,
+# a subset of workload.host_namespaces, so they are deliberately not aliased.
 ALIASES: dict[str, str] = {
     "trivy:KSV-0017": "workload.privileged",
     "trivy:KSV-0001": "workload.privilege_escalation",
     "trivy:KSV-0012": "workload.run_as_non_root_missing",
     "trivy:KSV-0014": "workload.writable_root_fs",
-    "trivy:KSV-0009": "workload.host_namespaces",
     "trivy:KSV-0023": "workload.host_path",
     "kubescape:C-0057": "workload.privileged",
     "kubescape:C-0016": "workload.privilege_escalation",
     "kubescape:C-0013": "workload.run_as_non_root_missing",
     "kubescape:C-0017": "workload.writable_root_fs",
-    "kubescape:C-0041": "workload.host_namespaces",
     "kubescape:C-0048": "workload.host_path",
 }
 OWNER_KINDS = frozenset({"ReplicaSet", "StatefulSet", "DaemonSet", "Job"})
