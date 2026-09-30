@@ -22,6 +22,8 @@ def _default_run(argv: list[str], timeout: float) -> tuple[int, str, str]:
         proc = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, check=False)
     except subprocess.TimeoutExpired:
         return 124, "", f"timeout after {timeout}s"
+    except OSError as exc:
+        return 127, "", f"cannot execute {argv[0]}: {exc}"
     return proc.returncode, proc.stdout, proc.stderr
 
 
@@ -46,7 +48,7 @@ def kubescape_argv(out: Path, context: str | None) -> list[str]:
 
 def trivy_argv(out: Path, context: str | None) -> list[str]:
     argv = [
-        "trivy", "k8s", "--report", "all", "--format", "json",
+        "trivy", "k8s", "-q", "--report", "all", "--format", "json",
         "--disable-node-collector", "--output", str(out)
     ]
     return argv + ([context] if context else [])
@@ -78,34 +80,80 @@ def run_scanners(
         if which(name) is None:
             out.status[name] = {"status": "missing"}
             continue
-        _, version_out, _ = run(version_argv, 30)
+        try:
+            code, version_out, err = run(version_argv, 30)
+            if code != 0:
+                out.status[name] = {
+                    "status": "failed",
+                    "error": (err.strip() or f"exit {code}")[-500:],
+                }
+                continue
+        except Exception as exc:
+            out.status[name] = {"status": "failed", "error": str(exc)[-500:]}
+            continue
         version = (version_out.strip().splitlines() or ["unknown"])[0]
         target = workdir / f"{name}.json"
+        target.unlink(missing_ok=True)
         argv = argv_fn(target, context)
-        code, _, err = run(argv, SCAN_TIMEOUT)
+        try:
+            code, _, err = run(argv, SCAN_TIMEOUT)
+        except Exception as exc:
+            out.status[name] = {
+                "status": "failed",
+                "version": version,
+                "error": str(exc)[-500:],
+            }
+            continue
         out.commands.append({"argv": argv, "exit_code": code})
         if code != 0 or not target.is_file():
             error_msg = (err.strip() or f"exit {code}")[-500:]
             out.status[name] = {"status": "failed", "version": version, "error": error_msg}
             continue
         try:
-            doc = json.loads(target.read_text())
+            text = target.read_text()
+        except UnicodeDecodeError:
+            out.status[name] = {
+                "status": "failed",
+                "version": version,
+                "error": "scanner wrote invalid UTF-8",
+            }
+            continue
+        try:
+            doc = json.loads(text)
         except json.JSONDecodeError:
             error_msg = "scanner wrote invalid JSON"
             out.status[name] = {"status": "failed", "version": version, "error": error_msg}
             continue
-        out.files[f"scanners/{name}.json"] = dump_json(sanitize(doc))
+        if not isinstance(doc, dict):
+            error_msg = "scanner output has unexpected shape"
+            out.status[name] = {"status": "failed", "version": version, "error": error_msg}
+            continue
+        try:
+            sanitized = sanitize(doc)
+        except Exception:
+            error_msg = "scanner output has unexpected shape"
+            out.status[name] = {"status": "failed", "version": version, "error": error_msg}
+            continue
+        out.files[f"scanners/{name}.json"] = dump_json(sanitized)
         out.status[name] = {"status": "ok", "version": version}
     nodes = []
     for node, path in plan.kube_bench_results:
         slug = _slug(node)
         try:
-            doc = json.loads(Path(path).read_text())
+            text = Path(path).read_text()
+        except (FileNotFoundError, IsADirectoryError, OSError, UnicodeDecodeError):
+            raise ValueError(f"kube-bench result is not valid JSON: {path}") from None
+        try:
+            doc = json.loads(text)
         except json.JSONDecodeError:
-            error_msg = f"kube-bench result is not valid JSON: {path}"
-            out.status["kube-bench"] = {"status": "failed", "error": error_msg}
-            continue
-        out.files[f"scanners/kube-bench-{slug}.json"] = dump_json(sanitize_kube_bench(doc))
+            raise ValueError(f"kube-bench result is not valid JSON: {path}") from None
+        if not isinstance(doc, dict):
+            raise ValueError(f"kube-bench result is not valid JSON: {path}")
+        try:
+            sanitized = sanitize_kube_bench(doc)
+        except Exception:
+            raise ValueError(f"kube-bench result is not valid JSON: {path}") from None
+        out.files[f"scanners/kube-bench-{slug}.json"] = dump_json(sanitized)
         nodes.append(slug)
     if nodes:
         out.status["kube-bench"] = {"status": "imported", "nodes": nodes}

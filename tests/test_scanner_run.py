@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from k8s_baseline_audit.collect.scanners import (
     ScannerPlan,
     kubescape_argv,
@@ -38,8 +40,11 @@ def installed(name):
 def test_trivy_never_starts_node_collector(tmp_path):
     argv = trivy_argv(tmp_path / "t.json", "kind-x")
     assert "--disable-node-collector" in argv
-    assert argv[:2] == ["trivy", "k8s"]
-    assert "kind-x" in argv
+    assert argv[:3] == ["trivy", "k8s", "-q"]
+    assert "--context" not in argv
+    assert argv[-1] == "kind-x"
+    argv_no_context = trivy_argv(tmp_path / "t.json", None)
+    assert argv_no_context[-1] == str(tmp_path / "t.json")
     assert "--kube-context" in kubescape_argv(tmp_path / "k.json", "kind-x")
 
 
@@ -127,9 +132,115 @@ def test_kube_bench_actual_value_is_sanitized(tmp_path):
 def test_invalid_kube_bench_json_raises_error(tmp_path):
     bad_kb = tmp_path / "bad_kb.json"
     bad_kb.write_text("not valid json {")
+    with pytest.raises(ValueError, match="kube-bench result is not valid JSON"):
+        run_scanners(
+            ScannerPlan(
+                kubescape=False,
+                trivy=False,
+                kube_bench_results=(("node1", bad_kb),),
+            ),
+            None,
+            tmp_path,
+            which=installed,
+            run=FakeRun({}),
+        )
+
+
+def test_kube_bench_unreadable_file_raises_error(tmp_path):
+    missing = tmp_path / "missing_kb.json"
+    with pytest.raises(ValueError, match="kube-bench result is not valid JSON"):
+        run_scanners(
+            ScannerPlan(
+                kubescape=False,
+                trivy=False,
+                kube_bench_results=(("node1", missing),),
+            ),
+            None,
+            tmp_path,
+            which=installed,
+            run=FakeRun({}),
+        )
+
+
+def test_kube_bench_not_dict_raises_error(tmp_path):
+    bad_kb = tmp_path / "list_kb.json"
+    bad_kb.write_text(json.dumps([]))
+    with pytest.raises(ValueError, match="kube-bench result is not valid JSON"):
+        run_scanners(
+            ScannerPlan(
+                kubescape=False,
+                trivy=False,
+                kube_bench_results=(("node1", bad_kb),),
+            ),
+            None,
+            tmp_path,
+            which=installed,
+            run=FakeRun({}),
+        )
+
+
+def test_scanner_version_call_filenotfound_is_failure(tmp_path):
+    def fake_run_with_error(argv, timeout):
+        if len(argv) <= 2:  # version call
+            raise FileNotFoundError(f"cannot find {argv[0]}")
+        return 0, "", ""
+
     out = run_scanners(
-        ScannerPlan(kubescape=False, trivy=False, kube_bench_results=(("node1", bad_kb),)),
-        None, tmp_path, which=installed, run=FakeRun({}),
+        ScannerPlan(trivy=True, kubescape=False),
+        None,
+        tmp_path,
+        which=installed,
+        run=fake_run_with_error,
     )
-    assert out.status["kube-bench"]["status"] == "failed"
-    assert "not valid JSON" in out.status["kube-bench"]["error"]
+    assert out.status["trivy"]["status"] == "failed"
+
+
+def test_scanner_timeout_exit_124_is_failure(tmp_path):
+    def fake_run_timeout(argv, timeout):
+        if len(argv) <= 2:  # version call
+            return 0, "trivy v1.0\n", ""
+        return 124, "", "timeout after 1800s"
+
+    out = run_scanners(
+        ScannerPlan(kubescape=False),
+        None,
+        tmp_path,
+        which=installed,
+        run=fake_run_timeout,
+    )
+    assert out.status["trivy"]["status"] == "failed"
+    assert "timeout" in out.status["trivy"]["error"].lower()
+
+
+def test_scanner_output_as_json_list_is_failure(tmp_path):
+    run = FakeRun({"trivy": "[]"})
+    out = run_scanners(
+        ScannerPlan(kubescape=False),
+        None,
+        tmp_path,
+        which=installed,
+        run=run,
+    )
+    assert out.status["trivy"]["status"] == "failed"
+    assert "unexpected shape" in out.status["trivy"]["error"]
+
+
+def test_stale_file_not_overwritten_when_scanner_fails(tmp_path):
+    stale = tmp_path / "trivy.json"
+    stale.write_text(json.dumps({"old": "data"}))
+
+    def fake_run_no_write(argv, timeout):
+        if len(argv) <= 2:
+            return 0, "trivy v1.0\n", ""
+        # Scanner runs but doesn't write output
+        return 0, "", ""
+
+    out = run_scanners(
+        ScannerPlan(kubescape=False),
+        None,
+        tmp_path,
+        which=installed,
+        run=fake_run_no_write,
+    )
+    assert out.status["trivy"]["status"] == "failed"
+    assert out.files == {}
