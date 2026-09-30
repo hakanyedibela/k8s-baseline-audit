@@ -35,6 +35,19 @@ def _safe_rel(rel: str) -> str:
     return rel
 
 
+def _check_symlink(root: Path, rel: str) -> None:
+    """Reject symlinks in bundle paths."""
+    path = root / rel
+    if path.is_symlink():
+        raise BundleFormatError(f"symlink in bundle: {rel}")
+    # Check if any parent path component is a symlink
+    for parent in path.parents:
+        if parent == root:
+            break
+        if parent.is_symlink():
+            raise BundleFormatError(f"symlink in bundle: {rel}")
+
+
 def write_bundle(root: Path, files: dict[str, bytes], manifest: dict) -> Path:
     for rel in files:
         _safe_rel(rel)
@@ -66,6 +79,7 @@ class Bundle:
         _safe_rel(rel)
         if self.provenance_verified and rel not in self.manifest["files"]:
             raise BundleIntegrityError(f"file not listed in manifest: {rel}")
+        _check_symlink(self.root, rel)
         return (self.root / rel).read_bytes()
 
     def read_json(self, rel: str) -> Any:
@@ -73,13 +87,25 @@ class Bundle:
             return json.loads(self.read_bytes(rel))
         except json.JSONDecodeError as exc:
             raise BundleFormatError(f"{rel} is not valid JSON: {exc}") from exc
+        except UnicodeDecodeError as exc:
+            raise BundleFormatError(f"{rel} is not valid UTF-8: {exc}") from exc
 
     def _optional(self, rel: str, default: Any) -> Any:
         return self.read_json(rel) if self.has(rel) else default
 
     @property
     def errors(self) -> list[dict]:
-        return self._optional("errors.json", {"errors": []}).get("errors", [])
+        if not self.has("errors.json"):
+            return []
+        doc = self.read_json("errors.json")
+        if not isinstance(doc, dict):
+            raise BundleFormatError("errors.json must be a JSON object")
+        if "errors" not in doc:
+            raise BundleFormatError("errors.json must contain 'errors' key")
+        errors = doc["errors"]
+        if not isinstance(errors, list):
+            raise BundleFormatError("errors.json 'errors' must be a list")
+        return errors
 
     @property
     def preflight(self) -> dict:
@@ -87,11 +113,23 @@ class Bundle:
 
     def files_under(self, prefix: str) -> list[str]:
         if self.provenance_verified:
-            return sorted(r for r in self.manifest["files"] if r.startswith(prefix))
+            result = []
+            for r in self.manifest["files"]:
+                if r.startswith(prefix):
+                    _safe_rel(r)
+                    _check_symlink(self.root, r)
+                    result.append(r)
+            return sorted(result)
         base = self.root / prefix
         if not base.is_dir():
             return []
-        return sorted(p.relative_to(self.root).as_posix() for p in base.rglob("*") if p.is_file())
+        result = []
+        for p in base.rglob("*"):
+            if p.is_file():
+                rel = p.relative_to(self.root).as_posix()
+                _check_symlink(self.root, rel)
+                result.append(rel)
+        return sorted(result)
 
     def manifest_sha256(self) -> str:
         return sha256_bytes((self.root / MANIFEST).read_bytes())
@@ -105,13 +143,23 @@ def load_bundle(root: Path) -> Bundle:
         manifest = json.loads(manifest_path.read_bytes())
     except json.JSONDecodeError as exc:
         raise BundleFormatError(f"{MANIFEST} is not valid JSON: {exc}") from exc
+    except UnicodeDecodeError as exc:
+        raise BundleFormatError(f"{MANIFEST} is not valid UTF-8: {exc}") from exc
+    if not isinstance(manifest, dict):
+        raise BundleFormatError("manifest.json must be a JSON object")
     if manifest.get("schema") != BUNDLE_SCHEMA:
         raise BundleFormatError(f"unsupported bundle schema: {manifest.get('schema')!r}")
     files = manifest.get("files") or {}
+    if files and not isinstance(files, dict):
+        raise BundleFormatError("manifest.json 'files' must be a JSON object")
     if not files:
         return Bundle(root, manifest, False)
-    for rel, digest in files.items():
+    # Check for symlinks first, before verifying hashes
+    for rel in files:
         _safe_rel(rel)
+        _check_symlink(root, rel)
+    # Then verify hashes
+    for rel, digest in files.items():
         path = root / rel
         if not path.is_file():
             raise BundleIntegrityError(f"listed file missing: {rel}")

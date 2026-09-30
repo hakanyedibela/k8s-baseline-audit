@@ -52,13 +52,18 @@ def _slug(text: str) -> str:
 
 
 def _reason(result: CommandResult) -> str:
-    detail = (result.stderr or result.stdout).strip()[-500:]
+    detail = result.stderr.strip()[-500:]
     if detail:
         return f"kubectl exit {result.exit_code}: {detail}"
     return f"kubectl exit {result.exit_code}"
 
 
 def collect(runner: KubectlRunner, out_parent: Path, options: CollectOptions) -> Path:
+    # Validate extra_files before any kubectl calls
+    for rel in options.extra_files:
+        if not rel.startswith("scanners/"):
+            raise ValueError(f"extra file outside scanners/: {rel}")
+
     files: dict[str, bytes] = {}
     errors: list[dict] = []
     preflight: dict[str, bool] = {}
@@ -79,10 +84,13 @@ def collect(runner: KubectlRunner, out_parent: Path, options: CollectOptions) ->
 
     for kind in ALL_KINDS:
         can = runner.run("auth", "can-i", "list", kind, *_scope(kind))
-        allowed = can.stdout.strip() == "yes"
+        allowed = can.exit_code == 0 and can.stdout.strip() == "yes"
         preflight[kind] = allowed
         if not allowed:
-            msg = "forbidden: kubectl auth can-i list returned no"
+            if can.exit_code == 1 and can.stdout.strip() == "no":
+                msg = "forbidden: kubectl auth can-i list returned no"
+            else:
+                msg = f"preflight failed: {_reason(can)}"
             errors.append({"resource": kind, "reason": msg})
             continue
         if kind == "secrets":

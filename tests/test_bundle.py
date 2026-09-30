@@ -82,3 +82,89 @@ def test_invalid_json_file_raises_format_error(tmp_path):
     root = _write(tmp_path, {"resources/pods.json": b"not json"})
     with pytest.raises(BundleFormatError, match="not valid JSON"):
         load_bundle(root).read_json("resources/pods.json")
+
+
+def test_manifest_must_be_dict(tmp_path):
+    root = tmp_path / "bad"
+    root.mkdir()
+    (root / "manifest.json").write_text(json.dumps(["not", "a", "dict"]))
+    with pytest.raises(BundleFormatError, match="must be a JSON object"):
+        load_bundle(root)
+
+
+def test_files_in_manifest_must_be_dict(tmp_path):
+    root = tmp_path / "bad"
+    root.mkdir()
+    (root / "manifest.json").write_text(
+        json.dumps({"schema": BUNDLE_SCHEMA, "files": ["not", "a", "dict"]})
+    )
+    with pytest.raises(BundleFormatError, match="must be a JSON object"):
+        load_bundle(root)
+
+
+def test_symlinks_are_rejected_verified_bundle(tmp_path):
+    root = tmp_path / "b"
+    (root / "resources").mkdir(parents=True)
+    target_file = root / "resources/pods.json"
+    target_file.write_text('{"items": []}')
+    # Create a symlink
+    symlink = root / "resources/link.json"
+    symlink.symlink_to(target_file)
+    # Write manifest that lists the symlink
+    hashes = {
+        "resources/pods.json": "0" * 64,
+        "resources/link.json": "0" * 64,
+    }
+    (root / "manifest.json").write_bytes(
+        json.dumps({"schema": BUNDLE_SCHEMA, "files": hashes})
+        .encode()
+        + b"\n"
+    )
+    with pytest.raises(BundleFormatError, match="symlink in bundle"):
+        load_bundle(root)
+
+
+def test_symlinks_are_rejected_unverified_bundle(tmp_path):
+    root = tmp_path / "b"
+    (root / "resources").mkdir(parents=True)
+    target_file = root / "resources/pods.json"
+    target_file.write_text('{"items": []}')
+    # Create a symlink
+    symlink = root / "resources/link.json"
+    symlink.symlink_to(target_file)
+    # Write unverified manifest (no hashes)
+    (root / "manifest.json").write_bytes(
+        json.dumps({"schema": BUNDLE_SCHEMA})
+        .encode()
+        + b"\n"
+    )
+    b = load_bundle(root)
+    # files_under should reject symlinks
+    with pytest.raises(BundleFormatError, match="symlink in bundle"):
+        b.files_under("resources/")
+
+
+def test_non_utf8_json_raises_unicode_error(tmp_path):
+    root = _write(tmp_path, {"resources/pods.json": b"\xff\xfe invalid utf8"})
+    with pytest.raises(BundleFormatError, match="not valid UTF-8"):
+        load_bundle(root).read_json("resources/pods.json")
+
+
+def test_errors_property_must_be_dict_with_errors_list(tmp_path):
+    root = _write(tmp_path, {"errors.json": b'{"not": "errors"}'})
+    b = load_bundle(root)
+    with pytest.raises(BundleFormatError):
+        _ = b.errors
+
+
+def test_preflight_property_tolerates_missing_file(tmp_path):
+    root = tmp_path / "b"
+    (root / "resources").mkdir(parents=True)
+    (root / "manifest.json").write_bytes(
+        json.dumps({"schema": BUNDLE_SCHEMA, "files": {}})
+        .encode()
+        + b"\n"
+    )
+    b = load_bundle(root)
+    # preflight.json missing should return empty dict, not raise
+    assert b.preflight == {}
