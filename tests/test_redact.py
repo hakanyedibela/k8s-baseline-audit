@@ -488,6 +488,127 @@ def test_parse_secret_rows():
     }
 
 
+def test_redact_argv_rule_d_embedded_in_shell_string():
+    """Rule D: embedded key=value inside shell strings are redacted."""
+    # Single quotes with embedded secret
+    argv = ["sh", "-c", "mysql --password=LEAK -h x"]
+    result = redact_argv(argv)
+    assert result == ["sh", "-c", "mysql --password=<redacted> -h x"]
+
+    # Double quotes with embedded secret
+    argv2 = ["sh", "-c", 'run --token="secrettoken" --x=1']
+    result2 = redact_argv(argv2)
+    assert result2 == ["sh", "-c", 'run --token=<redacted> --x=1']
+
+    # Mixed quoting
+    argv3 = ["sh", "-c", "run --token='a b' --x=1"]
+    result3 = redact_argv(argv3)
+    assert result3 == ["sh", "-c", "run --token=<redacted> --x=1"]
+
+
+def test_redact_argv_rule_d_safe_values_in_strings():
+    """Rule D: safe values inside strings are preserved."""
+    # Boolean safe value in shell string
+    argv = ["sh", "-c", "start --enable-bootstrap-token-auth=true"]
+    result = redact_argv(argv)
+    assert result == argv
+
+    # Path safe value in shell string
+    argv2 = ["sh", "-c", "app --config=/etc/app.cfg --port=8080"]
+    result2 = redact_argv(argv2)
+    assert result2 == argv2
+
+
+def test_redact_argv_rule_b_empty_next_element():
+    """Rule B: empty string next element is not masked."""
+    argv = ["--password", ""]
+    result = redact_argv(argv)
+    # Empty string is considered safe (not non-empty and non-safe)
+    assert result == ["--password", ""]
+
+
+def test_redact_pod_list_non_dict_input():
+    """redact_pod_list with non-dict input raises ValueError."""
+    with pytest.raises(ValueError, match="expected a kubectl List with items"):
+        redact_pod_list([])
+    with pytest.raises(ValueError, match="expected a kubectl List with items"):
+        redact_pod_list(None)
+
+
+def test_probe_with_null_exec():
+    """Probe with exec: null does not raise."""
+    doc = {
+        "items": [
+            {
+                "metadata": {"name": "test"},
+                "spec": {
+                    "containers": [
+                        {
+                            "name": "app",
+                            "livenessProbe": {"exec": None},
+                        }
+                    ]
+                },
+            }
+        ]
+    }
+    # Should not raise
+    result = redact_pod_list(doc)
+    assert result["items"][0]["spec"]["containers"][0]["livenessProbe"][
+        "exec"
+    ] is None
+
+
+def test_probe_with_non_dict_httpget():
+    """Probe with httpGet non-dict does not raise."""
+    doc = {
+        "items": [
+            {
+                "metadata": {"name": "test"},
+                "spec": {
+                    "containers": [
+                        {
+                            "name": "app",
+                            "readinessProbe": {"httpGet": None},
+                        }
+                    ]
+                },
+            }
+        ]
+    }
+    # Should not raise
+    result = redact_pod_list(doc)
+    assert result["items"][0]["spec"]["containers"][0]["readinessProbe"][
+        "httpGet"
+    ] is None
+
+
+def test_lifecycle_hook_with_null_exec():
+    """Lifecycle hook with exec: null does not raise."""
+    doc = {
+        "items": [
+            {
+                "metadata": {"name": "test"},
+                "spec": {
+                    "containers": [
+                        {
+                            "name": "app",
+                            "lifecycle": {
+                                "preStop": {"exec": None},
+                            },
+                        }
+                    ]
+                },
+            }
+        ]
+    }
+    # Should not raise
+    result = redact_pod_list(doc)
+    assert result["items"][0]["spec"]["containers"][0]["lifecycle"]["preStop"][
+        "exec"
+    ] is None
+
+
 def test_secret_template_exact_value():
     """SECRET_TEMPLATE never prints values ($v)."""
     expected = (

@@ -42,6 +42,12 @@ _RULE_C = re.compile(
     r"(?P<pre>[a-z][a-z0-9+.-]*://[^/:@\s]+:)[^@\s]+@", re.IGNORECASE
 )
 
+# Regex for Rule D: embedded key=value inside strings
+_RULE_D = re.compile(
+    rf"(?P<key>[-\w.]*?(?:{_SECRET_WORD})[-\w.]*)=(?P<val>\"[^\"]*\"|'[^']*'|[^\s\"']+)",
+    re.IGNORECASE,
+)
+
 
 def _is_safe_value(val: str) -> bool:
     """Check if value is safe (true/false or file path starting with /)."""
@@ -52,12 +58,22 @@ def _is_safe_value(val: str) -> bool:
     return False
 
 
+def _unquote_value(val: str) -> str:
+    """Strip surrounding quotes from a value."""
+    if (val.startswith('"') and val.endswith('"')) or (
+        val.startswith("'") and val.endswith("'")
+    ):
+        return val[1:-1]
+    return val
+
+
 def redact_argv(argv: list) -> list:
-    """Redact argv list following Rules A, B, C.
+    """Redact argv list following Rules A, B, C, D.
 
     Rule A: key=value where key contains SECRET_WORD and value is not safe
-    Rule B: two-token flag with SECRET_WORD followed by non-safe next element
+    Rule B: two-token flag with SECRET_WORD followed by non-empty, non-safe next element
     Rule C: URL credentials (applied after A/B)
+    Rule D: embedded key=value inside strings (applied after A/B/C)
     """
     result = []
     i = 0
@@ -85,11 +101,13 @@ def redact_argv(argv: list) -> list:
         # Rule B: two-token flag
         if _RULE_B.match(elem):
             # This element is a flag with SECRET_WORD
-            # Check if next element exists and is not safe
+            # Check if next element exists, is non-empty, and is not safe
             if i + 1 < len(argv):
                 next_elem = argv[i + 1]
-                if isinstance(next_elem, str) and not (
-                    next_elem.startswith("-") or _is_safe_value(next_elem)
+                if (
+                    isinstance(next_elem, str)
+                    and next_elem  # must be non-empty
+                    and not (next_elem.startswith("-") or _is_safe_value(next_elem))
                 ):
                     result.append(elem)
                     result.append(REDACTED)
@@ -98,6 +116,17 @@ def redact_argv(argv: list) -> list:
 
         # Rule C: URL credentials (applied to any string)
         redacted = _RULE_C.sub(r"\g<pre><redacted>@", elem)
+
+        # Rule D: embedded key=value inside strings (applied after A/B/C)
+        def replace_embedded(match: re.Match) -> str:
+            key = match.group("key")
+            val = match.group("val")
+            unquoted = _unquote_value(val)
+            if unquoted and not _is_safe_value(unquoted):
+                return f"{key}={REDACTED}"
+            return match.group(0)
+
+        redacted = _RULE_D.sub(replace_embedded, redacted)
         result.append(redacted)
         i += 1
 
@@ -115,12 +144,16 @@ def _redact_httpheaders(headers: list | None) -> None:
 
 def _redact_probe(probe: dict) -> None:
     """Redact exec.command and httpGet.httpHeaders in a probe."""
-    if not probe:
+    if not probe or not isinstance(probe, dict):
         return
-    if "exec" in probe and "command" in probe["exec"]:
-        probe["exec"]["command"] = redact_argv(probe["exec"]["command"])
-    if "httpGet" in probe and "httpHeaders" in probe["httpGet"]:
-        _redact_httpheaders(probe["httpGet"]["httpHeaders"])
+    # exec: null or non-dict is skipped
+    if "exec" in probe and isinstance(probe["exec"], dict):
+        if "command" in probe["exec"]:
+            probe["exec"]["command"] = redact_argv(probe["exec"]["command"])
+    # httpGet: null or non-dict is skipped
+    if "httpGet" in probe and isinstance(probe["httpGet"], dict):
+        if "httpHeaders" in probe["httpGet"]:
+            _redact_httpheaders(probe["httpGet"]["httpHeaders"])
 
 
 def _redact_container(container: dict) -> None:
@@ -143,14 +176,20 @@ def _redact_container(container: dict) -> None:
 
     # Lifecycle hooks: postStart, preStop
     lifecycle = container.get("lifecycle")
-    if lifecycle:
+    if lifecycle and isinstance(lifecycle, dict):
         for hook_field in LIFECYCLE_HOOKS:
             if hook_field in lifecycle:
                 hook = lifecycle[hook_field]
-                if "exec" in hook and "command" in hook["exec"]:
-                    hook["exec"]["command"] = redact_argv(hook["exec"]["command"])
-                if "httpGet" in hook and "httpHeaders" in hook["httpGet"]:
-                    _redact_httpheaders(hook["httpGet"]["httpHeaders"])
+                if not isinstance(hook, dict):
+                    continue
+                # exec: null or non-dict is skipped
+                if "exec" in hook and isinstance(hook["exec"], dict):
+                    if "command" in hook["exec"]:
+                        hook["exec"]["command"] = redact_argv(hook["exec"]["command"])
+                # httpGet: null or non-dict is skipped
+                if "httpGet" in hook and isinstance(hook["httpGet"], dict):
+                    if "httpHeaders" in hook["httpGet"]:
+                        _redact_httpheaders(hook["httpGet"]["httpHeaders"])
 
 
 def _redact_volumes(volumes: list | None) -> None:
@@ -174,9 +213,12 @@ def _redact_volumes(volumes: list | None) -> None:
 def redact_pod_list(doc: dict) -> dict:
     """Redact a Kubernetes Pod list.
 
-    Raises ValueError if doc.get("items") is not a list.
+    Raises ValueError if input is not a dict or doc.get("items") is not a list.
     Deep copy to avoid mutating input.
     """
+    # Shape validation: input must be a dict
+    if not isinstance(doc, dict):
+        raise ValueError("expected a kubectl List with items")
     # Shape validation: items must be a list
     items = doc.get("items")
     if not isinstance(items, list):
