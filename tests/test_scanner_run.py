@@ -68,7 +68,7 @@ def test_outputs_are_sanitized_and_statuses_recorded(tmp_path):
     assert sorted(out.files) == ["scanners/kubescape.json", "scanners/trivy.json"]
     for data in out.files.values():
         assert b"hunter2-demo" not in data
-    assert out.status["kubescape"] == {"status": "ok", "version": "kubescape v9.9.9"}
+    assert out.status["kubescape"] == {"status": "ok", "version": "9.9.9"}
     assert [c["argv"][0] for c in out.commands] == ["kubescape", "trivy"]
 
 
@@ -321,6 +321,31 @@ def test_scanner_argv_disables_uploads_host_scan_and_telemetry(tmp_path):
     tv = trivy_argv(tmp_path / "t.json", "kind-x")
     assert tv == [
         "trivy", "k8s", "-q", "--report", "all", "--format", "json",
-        "--disable-node-collector", "--disable-telemetry", "--output", str(tmp_path / "t.json"),
-        "kind-x",
+        "--disable-node-collector", "--disable-telemetry", "--timeout", "25m",
+        "--output", str(tmp_path / "t.json"), "kind-x",
     ]
+
+
+def test_trivy_gets_explicit_timeout_below_subprocess_limit(tmp_path):
+    from k8s_baseline_audit.collect.scanners import SCAN_TIMEOUT, TRIVY_TIMEOUT_MINUTES
+
+    argv = trivy_argv(tmp_path / "t.json", "kind-x")
+    assert "--timeout" in argv
+    assert argv[argv.index("--timeout") + 1] == f"{TRIVY_TIMEOUT_MINUTES}m"
+    assert TRIVY_TIMEOUT_MINUTES * 60 < SCAN_TIMEOUT
+    assert argv[-1] == "kind-x"
+
+
+def test_scanner_version_number_is_extracted(tmp_path):
+    class VersionRun(FakeRun):
+        def __call__(self, argv, timeout):
+            if len(argv) <= 2:
+                kubescape = argv[0] == "kubescape"
+                text = "Your current version is: 4.0.15\n" if kubescape else "Version: 0.74.0\n"
+                return 0, text, ""
+            return super().__call__(argv, timeout)
+
+    run = VersionRun({"kubescape": {"results": [], "resources": []}, "trivy": {"Resources": []}})
+    out = run_scanners(ScannerPlan(), None, tmp_path, which=installed, run=run)
+    assert out.status["kubescape"]["version"] == "4.0.15"
+    assert out.status["trivy"]["version"] == "0.74.0"

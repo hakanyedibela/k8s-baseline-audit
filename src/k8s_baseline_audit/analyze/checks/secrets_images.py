@@ -72,8 +72,9 @@ def env_secret_ref(ctx: CheckContext) -> list[Hit]:
     return hits
 
 
-# FOO_PASSWORD_FILE and friends point at a mounted file or directory, not the credential.
-_POINTER = re.compile(r"_(FILE|PATH|DIR)$", re.IGNORECASE)
+# FOO_PASSWORD_FILE and friends point at a mounted file or directory, and FOO_SECRET_NAME names a
+# Secret object; none of them holds the credential itself.
+_POINTER = re.compile(r"_(FILE|PATH|DIR|NAME)$", re.IGNORECASE)
 
 
 @check(

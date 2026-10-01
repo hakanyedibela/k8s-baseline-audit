@@ -15,6 +15,9 @@ from .redact import redact_text
 from .sanitize import sanitize_kube_bench, sanitize_kubescape, sanitize_trivy
 
 SCAN_TIMEOUT = 1800
+# trivy's own k8s scan timeout (default 5m) is too short for real clusters; stay below SCAN_TIMEOUT.
+TRIVY_TIMEOUT_MINUTES = 25
+_VERSION = re.compile(r"\d+\.\d+(?:\.\d+)?")
 Run = Callable[[list[str], float], tuple[int, str, str]]
 
 
@@ -54,7 +57,8 @@ def kubescape_argv(out: Path, context: str | None) -> list[str]:
 def trivy_argv(out: Path, context: str | None) -> list[str]:
     argv = [
         "trivy", "k8s", "-q", "--report", "all", "--format", "json",
-        "--disable-node-collector", "--disable-telemetry", "--output", str(out)
+        "--disable-node-collector", "--disable-telemetry", "--timeout", f"{TRIVY_TIMEOUT_MINUTES}m",
+        "--output", str(out),
     ]
     return argv + ([context] if context else [])
 
@@ -101,7 +105,9 @@ def run_scanners(
         except Exception as exc:
             out.status[name] = {"status": "failed", "error": _error(str(exc))}
             continue
-        version = (version_out.strip().splitlines() or ["unknown"])[0]
+        first_line = (version_out.strip().splitlines() or ["unknown"])[0]
+        match = _VERSION.search(first_line)
+        version = match.group(0) if match else first_line
         target = workdir / f"{name}.json"
         target.unlink(missing_ok=True)
         argv = argv_fn(target, context)

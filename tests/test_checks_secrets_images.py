@@ -109,3 +109,12 @@ def test_registry_allowlist_case_insensitive():
     )
     hits = run_check("images.registry_not_allowed", c)
     assert len(hits) == 0  # Should be allowed (case-insensitive)
+
+
+def test_secret_name_variables_are_not_flagged():
+    from k8s_baseline_audit.collect.redact import REDACTED
+
+    names = ["WEBHOOK_SECRET_NAME", "tls_secret_name", "DB_PASSWORD"]
+    c = hardened_container(env=[{"name": n, "value": REDACTED} for n in names])
+    hits = run_check("secrets.credential_literal_env", ctx(pods=[pod(containers=[c])]))
+    assert [h.evidence.json_path for h in hits] == ["$.items[0].spec.containers[0].env[2]"]
