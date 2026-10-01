@@ -14,8 +14,8 @@ jobs:
       matrix:
         python: ["3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v7
-      - uses: pdm-project/setup-pdm@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pdm-project/setup-pdm@544d7237314ee09c256785bd360f6b30add38b37 # v4.6
         with:
           python-version: ${{ matrix.python }}
       - run: sudo apt-get update && sudo apt-get install -y jq shellcheck
@@ -28,8 +28,8 @@ jobs:
     # export-bundle.sh promises jq 1.6+. Run its parity tests with the oldest supported jq.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: pdm-project/setup-pdm@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pdm-project/setup-pdm@544d7237314ee09c256785bd360f6b30add38b37 # v4.6
         with:
           python-version: "3.12"
       - name: Install jq 1.6 first on PATH
@@ -51,11 +51,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: unit
     steps:
-      - uses: actions/checkout@v7
-      - uses: pdm-project/setup-pdm@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pdm-project/setup-pdm@544d7237314ee09c256785bd360f6b30add38b37 # v4.6
         with:
           python-version: "3.12"
-      - uses: helm/kind-action@v1
+      - uses: helm/kind-action@06c1ae10762d3b9c1644e7fe69596ae519e015a2 # v1.15.0
         with:
           cluster_name: kba-ci
       - name: Apply demo workloads after the namespace's default service account exists
