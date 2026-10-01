@@ -49,13 +49,14 @@ _RULE_D = re.compile(
 )
 
 
+_SAFE_PATH = re.compile(r"/\S*")
+
+
 def _is_safe_value(val: str) -> bool:
-    """Check if value is safe (true/false or file path starting with /)."""
+    """Safe: true/false (case-insensitive) or one path token (leading /, no whitespace)."""
     if val.lower() in ("true", "false"):
         return True
-    if val.startswith("/"):
-        return True
-    return False
+    return _SAFE_PATH.fullmatch(val) is not None
 
 
 def _unquote_value(val: str) -> str:

@@ -161,12 +161,26 @@ RULE_ARGS = [
     None,
     True,
     {"k": "plain"},  # non-strings pass through
+    # Addendum v2.2: Turkish i folding and tightened safe values
+    f"--APİ_KEY={SECRET}",
+    f"--apı-key={SECRET}",
+    f"--prıvate-key={SECRET}",
+    f"--credentıal={SECRET}",
+    "--APİKEY", SECRET,
+    f"ı://u:{SECRET}@h",
+    f"PASSWORD=/tmp; mysql --password={SECRET}",
+    f"TOKEN_FILE=/var/run/x && app --token={SECRET}",
+    "--password", f"/etc/a {SECRET}",
+    "--token-auth-file=/etc/k/t.csv",
+    "--audit-log-path=/var/log/x",
     "--token",  # B at the end, no next element
 ]
 SHELL_CMD = (
     f"mysql --password={SECRET} -h x && run --token='{SECRET} b' --x=1 "
     f"--pwd=\"{SECRET}\" --flag-token=true --cfg-secret=/etc/x --secret='' "
-    f"--dsn=\"/abs\" --apikey='TRUE' PASSWORD={SECRET};echo"
+    f"--dsn=\"/abs\" --apikey='TRUE' PASSWORD={SECRET};echo "
+    f"&& PASSWORD=/tmp; mysql --password={SECRET} && TOKEN_FILE=/var/run/x "
+    f"&& app --token={SECRET} --x-token='/a {SECRET}' ı://u:{SECRET}@h --apı-key={SECRET}"
 )
 RULE_PODS = {
     "apiVersion": "v1",

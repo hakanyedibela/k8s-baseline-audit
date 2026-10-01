@@ -43,14 +43,16 @@ def strip: sub("\\A[\\s\u001c-\u001f]+"; "") | sub("[\\s\u001c-\u001f]+\\z"; "")
 def parse: [fromjson?] | if length == 1 then .[0] else ("invalid JSON" | halt_error(2)) end;
 
 # redact.py: redact_argv rules A-D. [-\p{L}\p{N}_.] equals Python [-\w.] on str.
-def word: "(?:password|passwd|pass|pwd|token|secret|api[-_]?key|apikey|credentials?|dsn|bearer|private[-_]?key)";
+# Every i is [iıİ]: Python re.IGNORECASE folds Turkish dotted/dotless i, Oniguruma does not.
+def word: "(?:password|passwd|pass|pwd|token|secret|ap[iıİ][-_]?key|ap[iıİ]key|credent[iıİ]als?|dsn|bearer|pr[iıİ]vate[-_]?key)";
 def keyre: "[-\\p{L}\\p{N}_.]*?" + word + "[-\\p{L}\\p{N}_.]*";
 def sp: "\\s\u001c-\u001f";
 def rule_a: "\\A(?<key>" + keyre + ")=(?<val>[^\\n]*)\\n?\\z";
 def rule_b: "\\A-{1,2}" + keyre + "\\n?\\z";
-def rule_c: "(?<pre>[a-z][a-z0-9+.-]*://[^/:@" + sp + "]+:)[^@" + sp + "]+@";
+def rule_c: "(?<pre>[a-zıİ][a-z0-9+.ıİ-]*://[^/:@" + sp + "]+:)[^@" + sp + "]+@";
 def rule_d: "(?<key>" + keyre + ")=(?<val>\"[^\"]*\"|\u0027[^\u0027]*\u0027|[^" + sp + "\"\u0027]+)";
-def safe: (ascii_downcase | . == "true" or . == "false") or startswith("/");
+# Safe: true/false, or one path token (Python re.fullmatch(r"/\S*")).
+def safe: (ascii_downcase | . == "true" or . == "false") or test("\\A/[^" + sp + "]*\\z");
 def unquote:
   if (startswith("\"") and endswith("\"")) or (startswith("\u0027") and endswith("\u0027"))
   then .[1:-1] else . end;
@@ -159,12 +161,13 @@ def sanitize_kube_bench:
 
 # --- helpers ----------------------------------------------------------------------------
 
+USAGE="usage: $0 -o OUT_DIR [-c CONTEXT] [-k kubescape.json] [-t trivy.json] [-b NODE=kube-bench.json]..."
 usage() {
-  echo "usage: $0 -o OUT_DIR [-c CONTEXT] [-k kubescape.json] [-t trivy.json] [-b NODE=kube-bench.json]..." >&2
+  printf '%s\n' "$USAGE" >&2
   exit 2
 }
 die() {
-  echo "export-bundle: $*" >&2
+  printf 'export-bundle: %s\n' "$*" >&2
   exit 2
 }
 
@@ -256,6 +259,7 @@ fetch() {
   shift
   kc_check "$@"
   JRC=0
+  rm -f "$TMP/rc" # a stale exit code must never be reused
   kc_exec "$@" | jq -R -s -S "$JQ_LIB $prog" > "$TMP/out" 2> /dev/null || JRC=$?
   KRC=$(cat "$TMP/rc")
 }
@@ -310,7 +314,7 @@ while getopts "o:c:k:t:b:h" opt; do
       slug "$node" node >> "$TMP/kb.nodes"
       ;;
     h)
-      echo "usage: $0 -o OUT_DIR [-c CONTEXT] [-k kubescape.json] [-t trivy.json] [-b NODE=kube-bench.json]..."
+      printf '%s\n' "$USAGE"
       exit 0
       ;;
     *) usage ;;
@@ -410,7 +414,7 @@ jq -n -S \
     files: ($hashes | split("\n") | map(select(. != "") | split("\t") | {(.[0]): .[1]}) | add // {})}' \
   > "$STAGE/manifest.json"
 
-mkdir -p "$OUT" || die "cannot create $OUT"
-mkdir "$OUT/$NAME" 2> /dev/null || die "$OUT/$NAME already exists or cannot be created"
+mkdir -p -- "$OUT" || die "cannot create $OUT"
+mkdir -- "$OUT/$NAME" 2> /dev/null || die "$OUT/$NAME already exists or cannot be created"
 mv "$STAGE"/* "$OUT/$NAME"/
-echo "$OUT/$NAME"
+printf '%s\n' "$OUT/$NAME"

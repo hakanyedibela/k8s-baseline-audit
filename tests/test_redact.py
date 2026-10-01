@@ -617,3 +617,43 @@ def test_secret_template_exact_value():
         '{{range $k, $v := .data}}{{$k}},{{end}}{{"\\n"}}{{end}}'
     )
     assert SECRET_TEMPLATE == expected
+
+
+# --- Addendum v2.2: tightened safe values, Turkish i folding ---------------------------------
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["sh", "-c", "PASSWORD=/tmp; mysql --password=LEAK"],
+        ["sh", "-c", "TOKEN_FILE=/var/run/x && app --token=LEAK"],
+        ["--APİ_KEY=LEAK"],
+        ["--apı-key=LEAK"],
+        ["--prıvate-key=LEAK"],
+        ["--credentıal=LEAK"],
+        ["--APİKEY", "LEAK"],
+        ["ı://u:LEAK@h"],
+        ["--password", "/etc/a LEAK"],
+        ["sh", "-c", "run --token='/x LEAK'"],
+    ],
+)
+def test_redact_argv_v22_no_leak(argv):
+    assert "LEAK" not in json.dumps(redact_argv(argv), ensure_ascii=False)
+
+
+def test_redact_argv_v22_path_value_with_whitespace_fully_masked():
+    assert redact_argv(["PASSWORD=/tmp; mysql --password=LEAK"]) == ["PASSWORD=<redacted>"]
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--token-auth-file=/etc/k/t.csv"],
+        ["--enable-bootstrap-token-auth=true"],
+        ["--audit-log-path=/var/log/x"],
+        ["--password", "/etc/pw"],
+        ["sh", "-c", "run --secret-file=/etc/s --token=FALSE"],
+    ],
+)
+def test_redact_argv_v22_safe_values_survive(argv):
+    assert redact_argv(argv) == argv
