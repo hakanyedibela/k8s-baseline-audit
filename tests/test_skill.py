@@ -135,3 +135,39 @@ def test_skill_handles_kubeconfig_without_current_context():
     assert "kubectl config get-contexts" in step1
     assert "KUBECONFIG" in step1
     assert "--context" in step1
+
+
+def _section(body, start, end):
+    return body.split(start, 1)[1].split(end, 1)[0]
+
+
+def test_command_rule_limits_cluster_access_not_local_reading():
+    _, body = _split()
+    rule1 = _section(body, "1. Never run", "\n2. ")
+    assert "touch the cluster" in rule1
+    assert "read local files" in rule1
+
+
+def test_offline_steps_and_optional_flags_are_explicit():
+    _, body = _split()
+    step1 = _section(body, "## Step 1", "## Step 2")
+    assert "only `collect` needs it" in step1
+    step3 = _section(body, "## Step 3", "## Step 4")
+    assert "optional" in step3.lower()
+    assert "--registry-allowlist <REGISTRY>" not in step3.split("```")[1]  # not in the base command
+
+
+def test_step4_documents_findings_fields_and_cve_volume():
+    _, body = _split()
+    step4 = _section(body, "## Step 4", "## Step 5")
+    for field in ("`id`", "`check_id`", "`severity`", "`sources`", "`requirements`", "`resources`"):
+        assert field in step4, field
+    assert "per image" in step4
+    assert "own applications" in step4
+
+
+def test_handover_uses_the_report_status_names():
+    _, body = _split()
+    step6 = body.split("## Step 6", 1)[1]
+    for status in ("Not checked", "Manual check needed", "Partially checked"):
+        assert status in step6, status

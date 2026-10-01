@@ -9,7 +9,7 @@ Audit a Kubernetes cluster against BSI IT-Grundschutz APP.4.4 and SYS.1.6 and ha
 
 ## Hard rules
 
-1. Never run a command that changes a cluster. Never run `kubectl apply`, `kubectl delete`, `kubectl patch`, `kubectl edit`, `kubectl exec`, `kubectl scale`, `kubectl label`, `kubectl annotate`, `kubectl cordon`, `kubectl drain`, `helm install` or `helm upgrade`. The only commands you run are `k8s-baseline-audit ...`, `kubectl config current-context` and `kubectl config get-contexts`.
+1. Never run a command that changes a cluster. Never run `kubectl apply`, `kubectl delete`, `kubectl patch`, `kubectl edit`, `kubectl exec`, `kubectl scale`, `kubectl label`, `kubectl annotate`, `kubectl cordon`, `kubectl drain`, `helm install` or `helm upgrade`. The only commands that touch the cluster are `k8s-baseline-audit collect`, `kubectl config current-context` and `kubectl config get-contexts`. You may read local files (the bundle, `findings.json`, `coverage.json`, the reports) with any read-only tool.
 2. Never edit `findings.json` or `coverage.json`, and never change a severity.
 3. Never write that a requirement is fulfilled, compliant, "erfüllt" or "konform". Use the coverage status words from the report.
 4. Every statement about the cluster in your text refers to a finding ID or a requirement ID.
@@ -33,7 +33,7 @@ pipx install git+https://github.com/hakanyedibela/k8s-baseline-audit
 Ask the user which applies:
 
 - **Live, read-only:** the user has a kubeconfig for the cluster. Show the current context with `kubectl config current-context` and get explicit confirmation that it is the cluster to audit.
-  Ask which kubeconfig file to use if it is not the default `~/.kube/config`, and set `KUBECONFIG` to it for every command (for example `KUBECONFIG=~/.kube/kubeadm_config k8s-baseline-audit collect ...`). If `kubectl config current-context` fails with `current-context is not set`, do not stop: run `kubectl config get-contexts`, show the list, and ask the user which context to audit. Always pass the confirmed context explicitly with `--context`; never rely on the current context and never change it.
+  Ask which kubeconfig file to use if it is not the default `~/.kube/config`, and set `KUBECONFIG` to it for the cluster commands (for example `KUBECONFIG=~/.kube/kubeadm_config k8s-baseline-audit collect ...`); only `collect` needs it, because `analyze` and `report` work offline on the bundle. If `kubectl config current-context` fails with `current-context is not set`, do not stop: run `kubectl config get-contexts`, show the list, and ask the user which context to audit. Always pass the confirmed context explicitly with `--context`; never rely on the current context and never change it.
   Tell the user what "read-only" covers: the tool itself issues only the kubectl verbs `get`, `version`, `api-resources`, `auth can-i`, `config current-context` and `config view`. kubescape and trivy, if enabled, read the cluster through the same kubeconfig with `kubescape scan --keep-local --host-scan=false` and `trivy k8s --disable-node-collector --disable-telemetry`; the tool cannot enforce what they do. Recommend a read-only identity, for example the ClusterRole in `examples/rbac/readonly-clusterrole.yaml` of the k8s-baseline-audit repository. Its optional secrets rule lets secret values travel to the client (the API has no names-only permission); the tool never writes them.
 - **Offline bundle:** the client ran the `export-bundle.sh` script from the k8s-baseline-audit repository and handed over a bundle directory. Ask for its path and skip Step 2.
 
@@ -50,14 +50,18 @@ The tool never launches kube-bench. Tell the user that they may run kube-bench t
 ## Step 3: Analyze
 
 ```sh
-k8s-baseline-audit analyze <BUNDLE> --out ./audit/analysis --registry-allowlist <REGISTRY>
+k8s-baseline-audit analyze <BUNDLE> --out ./audit/analysis
 ```
 
-Repeat `--registry-allowlist` per registry, or leave it out. Exit code 0 or 1 is success (1 means findings at or above `high`). Exit code 2 is an error: show it to the user and stop.
+Optional: add `--registry-allowlist <REGISTRY>` once per approved image registry. Without it, the registry check is reported as manual check needed. Exit code 0 or 1 is success (1 means findings at or above `high`). Exit code 2 is an error: show it to the user and stop.
 
 ## Step 4: Write the narratives
 
-Read `./audit/analysis/findings.json` and `./audit/analysis/coverage.json`. Write two files with identical structure:
+Read `./audit/analysis/findings.json` and `./audit/analysis/coverage.json`. Each finding in `findings.json` has `id`, `check_id`, `severity`, `sources`, `requirements` (BSI requirement IDs, empty if unmapped), `resources` (kind, namespace, name) and `title` (`de`, `en`); `coverage.json` has one entry per requirement with `requirement_id`, `status`, `finding_ids` and `reasons`.
+
+Scanner vulnerability findings (`check_id` starting with `trivy:CVE-` or `trivy:GHSA-`) often number in the thousands. The report already summarizes them per image in section 3b. In the summary, give their count and the most affected images; rank individual CVEs only when they sit in the client's own applications, not in base images or system components.
+
+Write two files with identical structure:
 
 - `summary`: 150 to 300 words for management. Name the three to five most important risks by finding ID, say what was not checked and why, and state that this is no certification.
 - `priorities`: rank the findings you consider most urgent, starting at 1. Base the reason on exposure, blast radius and ease of exploitation in this cluster. Use the same finding IDs and the same ranks in both languages.
@@ -115,7 +119,7 @@ Tell the user:
 
 - the two report paths
 - the number of findings per severity
-- the number of requirements with status "not checked" or "manual check needed"
+- the number of requirements per coverage status, using the report's names: Deviation, Not checked, Manual check needed, Partially checked, Organizational and No deviation found (omit statuses with zero)
 - that findings without BSI mapping are marked "keine BSI-Zuordnung" / "no BSI mapping", and that kube-system, kube-public and kube-node-lease are excluded from the PSA and NetworkPolicy checks (see the configured exclusions in the report)
 - that the questions section is the interview checklist for the client meeting
 - that the bundle holds client data and must be stored and deleted according to the engagement terms
