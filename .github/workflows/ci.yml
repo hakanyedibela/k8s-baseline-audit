@@ -58,7 +58,15 @@ jobs:
       - uses: helm/kind-action@v1
         with:
           cluster_name: kba-ci
-      - run: kubectl --context kind-kba-ci apply -f examples/kind-demo/insecure.yaml
+      - name: Apply demo workloads after the namespace's default service account exists
+        run: |
+          kubectl --context kind-kba-ci create namespace audit-demo
+          for _ in $(seq 1 30); do
+            kubectl --context kind-kba-ci -n audit-demo get serviceaccount default >/dev/null 2>&1 && break
+            sleep 2
+          done
+          kubectl --context kind-kba-ci -n audit-demo get serviceaccount default
+          kubectl --context kind-kba-ci apply -f examples/kind-demo/insecure.yaml
       - run: kubectl --context kind-kba-ci -n audit-demo wait --for=condition=Ready pod/hardened --timeout=180s
       - run: pdm install
       - run: K8S_BASELINE_AUDIT_IT_CONTEXT=kind-kba-ci pdm run pytest -m integration -v
