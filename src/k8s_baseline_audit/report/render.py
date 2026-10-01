@@ -262,12 +262,18 @@ def render_reports(inp: ReportInput, narratives: dict[str, Narrative] | None, ou
         full = any(Source.BUILTIN in f.sources or f.id in noted for f in g.findings)
         (detailed if full else compact).append(g)
     vulns = vulnerability_rows([f for f in inp.findings if is_vulnerability(f)], inp.images)
+    # Vulnerabilities the narrative ranks or annotates are listed individually under the summary.
+    ranks = {k: v.rank for k, v in (narrative.priorities if narrative else {}).items()}
+    vuln_notes = sorted(
+        (f for f in inp.findings if is_vulnerability(f) and f.id in noted),
+        key=lambda f: (ranks.get(f.id, NO_RANK), f.severity.rank, f.id),
+    )
     skipped = [r for r in inp.runs if r["state"] != "ran"]
     out_dir.mkdir(parents=True, exist_ok=True)
     paths: dict[str, Path] = {}
     for lang in LANGS:
         text = template.render(
-            lang=lang, L=LABELS[lang], meta=inp.meta, groups=detailed, compact=compact, vulns=vulns,
+            lang=lang, L=LABELS[lang], meta=inp.meta, groups=detailed, compact=compact, vulns=vulns, vuln_notes=vuln_notes, images=inp.images,
             severities=[s.value for s in Severity], coverage=inp.coverage, req=inp.mapping.get,
             narrative=narratives.get(lang), skipped=skipped, preflight=inp.preflight, manifest=inp.manifest,
         )

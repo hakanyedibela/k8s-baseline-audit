@@ -337,3 +337,34 @@ def test_vulnerability_table_is_labeled_by_scan_target_not_image():
     assert "scan target" in LABELS["en"]["vulns_note"].lower()
     assert "scan-ziel" in LABELS["de"]["vulns_note"].lower()
     assert "per image" not in LABELS["en"]["vulns_note"]
+
+
+def test_narrative_priorities_on_vulnerabilities_are_rendered(report_input, tmp_path):
+    pod_a = ResourceRef(kind="Pod", name="a", namespace="default")
+    crit = _cve("0123456789abcde1", "CVE-2024-0002", Severity.CRITICAL, [pod_a])
+    other = _cve("0123456789abcde2", "CVE-2024-0009", Severity.LOW, [pod_a])
+    inp = replace(report_input, findings=[*report_input.findings, crit, other],
+                  images={crit.id: "nginx:1 (debian 12)", other.id: "nginx:1 (debian 12)"})
+    narr = {
+        "de": Narrative(language="de", summary="Kritische Lücke in nginx.",
+                        priorities={crit.id: PriorityNote(rank=1, reason="Ausnutzbar aus dem Netz")},
+                        fix_notes={crit.id: "Image auf 1.27 heben."}),
+        "en": Narrative(language="en", summary="Critical hole in nginx.",
+                        priorities={crit.id: PriorityNote(rank=1, reason="Exploitable from the network")},
+                        fix_notes={crit.id: "Bump the image to 1.27."}),
+    }
+    paths = render_reports(inp, narr, tmp_path / "out")
+    en, de = paths["en"].read_text(), paths["de"].read_text()
+    assert "Prioritized vulnerabilities" in en and "Priorisierte Schwachstellen" in de
+    assert f"`{crit.id}`" in en and f"`{crit.id}`" in de
+    assert "Exploitable from the network" in en and "Bump the image to 1.27." in en
+    assert "Ausnutzbar aus dem Netz" in de
+    assert f"`{other.id}`" not in en  # only vulnerabilities the narrative comments on
+
+
+def test_no_prioritized_vulnerability_table_without_narrative_notes(report_input, tmp_path):
+    pod_a = ResourceRef(kind="Pod", name="a", namespace="default")
+    crit = _cve("0123456789abcde1", "CVE-2024-0002", Severity.CRITICAL, [pod_a])
+    inp = replace(report_input, findings=[*report_input.findings, crit], images={})
+    en = render_reports(inp, None, tmp_path / "out")["en"].read_text()
+    assert "Prioritized vulnerabilities" not in en

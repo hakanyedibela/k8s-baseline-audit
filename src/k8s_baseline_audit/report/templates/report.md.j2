@@ -89,6 +89,16 @@ _{{ L.not_executed }}_
 {% for v in vulns %}
 | {{ v.image | code }} | {% for s in severities %}{{ v.counts[s] }} | {% endfor %}{{ v.workloads }} |
 {% endfor %}
+{% if vuln_notes %}
+
+**{{ L.s_vuln_priorities }}** _({{ L.ai_label }})_
+
+| ID | {{ L.col_title }} | {{ L.col_severity }} | {{ L.col_image }} | {{ L.priority }} | {{ L.col_note }} |
+|---|---|---|---|---|---|
+{% for f in vuln_notes %}
+| {{ f.id | code }} | {{ f.title | attr(lang) | md }} | {{ L.sev[f.severity.value] }} | {{ (images.get(f.id) or "?") | code }} | {% if narrative and f.id in narrative.priorities %}{{ narrative.priorities[f.id].rank }} – {{ narrative.priorities[f.id].reason | md }}{% else %}–{% endif %} | {% if narrative and f.id in narrative.fix_notes %}{{ narrative.fix_notes[f.id] | md }}{% else %}–{% endif %} |
+{% endfor %}
+{% endif %}
 {% else %}
 {{ L.no_vulns }}
 {% endif %}

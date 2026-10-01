@@ -68,7 +68,7 @@ def _error(text: str) -> str:
     return redact_text(text.strip())[-500:]
 
 
-def _slug(text: str) -> str:
+def node_slug(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "-", text).strip("-") or "node"
 
 
@@ -154,7 +154,7 @@ def run_scanners(
         out.status[name] = {"status": "ok", "version": version}
     nodes = []
     for node, path in plan.kube_bench_results:
-        slug = _slug(node)
+        slug = node_slug(node)
         if slug in nodes:
             raise ValueError(f"duplicate kube-bench node name: {slug}")
         try:

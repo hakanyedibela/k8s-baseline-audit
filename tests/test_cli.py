@@ -289,3 +289,29 @@ def test_unexpected_exception_is_internal_error(command, sample_bundle, tmp_path
     assert result.exit_code == 2
     assert "error: internal error: ZeroDivisionError: kaputt" in result.stderr
     assert "Traceback" not in result.stderr
+
+
+def _scanners_must_not_run(*args, **kwargs):
+    raise AssertionError("scanners started before kube-bench input was validated")
+
+
+def test_invalid_kube_bench_file_fails_before_scanners(tmp_path, monkeypatch):
+    bad = tmp_path / "kb.json"
+    bad.write_text("not json")
+    monkeypatch.setattr(cli, "run_scanners", _scanners_must_not_run)
+    args = ["collect", "--out", str(tmp_path), "--kube-bench-result", f"cp={bad}"]
+    result = runner.invoke(cli.app, args)
+    assert result.exit_code == 2
+    assert "kube-bench result is not valid JSON" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_duplicate_kube_bench_node_fails_before_scanners(tmp_path, monkeypatch):
+    good = tmp_path / "kb.json"
+    good.write_text(json.dumps({"Controls": []}))
+    monkeypatch.setattr(cli, "run_scanners", _scanners_must_not_run)
+    args = ["collect", "--out", str(tmp_path),
+            "--kube-bench-result", f"cp 1={good}", "--kube-bench-result", f"cp-1={good}"]
+    result = runner.invoke(cli.app, args)
+    assert result.exit_code == 2
+    assert "duplicate kube-bench node name" in result.stderr

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import tempfile
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -20,7 +21,7 @@ from .bundle import BundleFormatError, BundleIntegrityError, load_bundle
 from .collect.collector import CollectOptions
 from .collect.collector import collect as collect_bundle
 from .collect.runner import KubectlRunner
-from .collect.scanners import ScannerPlan, run_scanners
+from .collect.scanners import ScannerPlan, node_slug, run_scanners
 from .mapping.schema import load_mapping
 from .models import Severity
 from .report.render import Narrative, NarrativeError, load_report_input, render_reports
@@ -70,7 +71,17 @@ def _parse_kube_bench(values: list[str]) -> tuple[tuple[str, Path], ...]:
             raise _fail(f"--kube-bench-result expects NODE=FILE, got {value!r}")
         if not Path(path).is_file():
             raise _fail(f"kube-bench result file not found: {path}")
+        try:
+            doc = json.loads(Path(path).read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            doc = None
+        if not isinstance(doc, dict):
+            raise _fail(f"kube-bench result is not valid JSON: {path}")
         parsed.append((node, Path(path)))
+    slugs = [node_slug(node) for node, _ in parsed]
+    for slug in slugs:
+        if slugs.count(slug) > 1:
+            raise _fail(f"duplicate kube-bench node name: {slug}")
     return tuple(parsed)
 
 
