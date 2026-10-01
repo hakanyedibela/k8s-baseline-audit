@@ -310,3 +310,17 @@ def test_scanner_exception_text_is_redacted(tmp_path):
 
     out = run_scanners(ScannerPlan(kubescape=False), None, tmp_path, which=installed, run=run)
     assert out.status["trivy"]["error"] == "token=<redacted>"
+
+
+def test_scanner_argv_disables_uploads_host_scan_and_telemetry(tmp_path):
+    ks = kubescape_argv(tmp_path / "k.json", "kind-x")
+    assert ks == [
+        "kubescape", "scan", "--format", "json", "--output", str(tmp_path / "k.json"),
+        "--keep-local", "--host-scan=false", "--kube-context", "kind-x",
+    ]
+    tv = trivy_argv(tmp_path / "t.json", "kind-x")
+    assert tv == [
+        "trivy", "k8s", "-q", "--report", "all", "--format", "json",
+        "--disable-node-collector", "--disable-telemetry", "--output", str(tmp_path / "t.json"),
+        "kind-x",
+    ]

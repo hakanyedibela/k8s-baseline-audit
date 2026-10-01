@@ -43,14 +43,18 @@ class ScannerOutput:
 
 
 def kubescape_argv(out: Path, context: str | None) -> list[str]:
-    argv = ["kubescape", "scan", "--format", "json", "--output", str(out)]
+    # --keep-local: never report to a backend; --host-scan=false: no host-sensor workloads.
+    argv = [
+        "kubescape", "scan", "--format", "json", "--output", str(out),
+        "--keep-local", "--host-scan=false",
+    ]
     return argv + (["--kube-context", context] if context else [])
 
 
 def trivy_argv(out: Path, context: str | None) -> list[str]:
     argv = [
         "trivy", "k8s", "-q", "--report", "all", "--format", "json",
-        "--disable-node-collector", "--output", str(out)
+        "--disable-node-collector", "--disable-telemetry", "--output", str(out)
     ]
     return argv + ([context] if context else [])
 

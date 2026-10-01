@@ -3,12 +3,19 @@ kubescape: 4.0.15
 kube-bench: image docker.io/aquasec/kube-bench:v0.16.0, benchmark cis-1.12 (Controls[0].version), run on kind node image kindest/node:v1.37.0
 
 Verified commands (Task 13 builds the same ones):
-  trivy k8s -q --report all --format json --disable-node-collector --output <file> <context>
+  trivy k8s -q --report all --format json --disable-node-collector --disable-telemetry --output <file> <context>
     - the kube context is a POSITIONAL argument; there is no --context flag (unknown flag: --context)
     - --disable-node-collector exists (skips the node-collector job, which would create resources)
     - --report all, --format json confirmed
-  kubescape scan --kube-context <context> --format json --output <file>
+    - --disable-telemetry exists (`trivy k8s --help`, global flag: "disable sending anonymous
+      usage data to Aqua")
+  kubescape scan --format json --output <file> --keep-local --host-scan=false --kube-context <context>
     - --kube-context, --format, --output confirmed
+    - --keep-local exists ("If you do not want your Kubescape results reported to configured backend")
+    - --host-scan=false is the documented way to disable host data collection (`kubescape scan
+      --help`: "Use --host-scan=false to disable host data collection"; without it kubescape
+      auto-detects node-agent CRDs)
+    - results are not submitted unless --submit is passed (default per --help)
   kube-bench: upstream job.yaml with container args ["run", "--targets", "node", "--json"] added
     (command stays ["kube-bench"]); output is the Job log, JSON only.
 
