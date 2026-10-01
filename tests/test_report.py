@@ -46,14 +46,14 @@ def narratives(inp, rank_en=1):
 
 
 def _ids(text):
-    return re.findall(r"^\| ID \| `([0-9a-f]{16})` \|$", text, re.M)
+    return re.findall(r"^\| `([0-9a-f]{16})` \| ", text, re.M)
 
 
 def test_parity_between_languages(report_input, tmp_path):
     paths = render_reports(report_input, narratives(report_input), tmp_path / "out")
     de, en = paths["de"].read_text(), paths["en"].read_text()
     assert _ids(de) == _ids(en)
-    assert len(_ids(de)) == len([f for f in report_input.findings if not f.check_id.startswith("trivy:CVE-")])
+    assert len(_ids(de)) == len(report_input.findings)  # sample bundle: built-in findings only
     rows = r"^\| (APP\.4\.4|SYS\.1\.6)\.A\d+ \|"
     assert len(re.findall(rows, de, re.M)) == len(re.findall(rows, en, re.M)) == len(report_input.coverage)
     assert de.count("### ") == en.count("### ")
@@ -203,21 +203,101 @@ def test_hostile_bundle_values_do_not_break_structure(report_input, tmp_path):
     assert "unknown" in bad  # scanner without status
 
 
-def test_trivy_vulnerability_rendered_in_vuln_table(report_input, tmp_path):
-    def cve(resources):
-        return Finding(
-            id="0123456789abcdef", check_id="trivy:CVE-2024-0001",
-            title=Localized(de="CVE-2024-0001", en="CVE-2024-0001"), severity=Severity.HIGH,
-            resources=resources, evidence=[], sources=[Source.TRIVY],
-            remediation=Localized(de="Image aktualisieren.", en="Update the image."))
-    inp = replace(report_input, findings=[*report_input.findings,
-                  cve([ResourceRef(kind="Pod", name="p", namespace="default")])])
+def _cve(fid, cve, severity, resources):
+    return Finding(
+        id=fid, check_id=f"trivy:{cve}", title=Localized(de=cve, en=cve), severity=severity,
+        resources=resources, evidence=[], sources=[Source.TRIVY],
+        remediation=Localized(de="Image aktualisieren.", en="Update the image."))
+
+
+def test_vulnerabilities_are_counted_per_image(report_input, tmp_path):
+    pod_a = ResourceRef(kind="Pod", name="a", namespace="default")
+    pod_b = ResourceRef(kind="Pod", name="b", namespace="default")
+    vulns = [
+        _cve("0123456789abcdef", "CVE-2024-0001", Severity.HIGH, [pod_a]),
+        _cve("0123456789abcde0", "CVE-2024-0001", Severity.HIGH, [pod_b]),
+        _cve("0123456789abcde1", "CVE-2024-0002", Severity.CRITICAL, [pod_a]),
+        _cve("0123456789abcde2", "GHSA-xxxx", Severity.LOW, [pod_b]),
+        _cve("0123456789abcde3", "CVE-2024-0003", Severity.MEDIUM, []),
+    ]
+    images = {
+        "0123456789abcdef": "nginx:1 (debian 12)",
+        "0123456789abcde0": "nginx:1 (debian 12)",
+        "0123456789abcde1": "nginx:1 (debian 12)",
+        "0123456789abcde2": "busybox:1",
+    }
+    inp = replace(report_input, findings=[*report_input.findings, *vulns], images=images)
     text = render_reports(inp, None, tmp_path / "a")["en"].read_text()
-    assert "| `0123456789abcdef` | CVE-2024-0001 | High | `Pod/default/p` |" in text
-    assert text.count("`0123456789abcdef`") == 1  # not in the main findings list
-    noref = replace(report_input, findings=[*report_input.findings, cve([])])
-    assert "| `0123456789abcdef` | CVE-2024-0001 | High | – |" in (
-        render_reports(noref, None, tmp_path / "b")["en"].read_text())
+    assert "| Image | Critical | High | Medium | Low | Workloads |" in text
+    assert "| `nginx:1 (debian 12)` | 1 | 1 | 0 | 0 | 2 |" in text
+    assert "| `busybox:1` | 0 | 0 | 0 | 1 | 1 |" in text
+    assert "| `?` | 0 | 0 | 1 | 0 | 0 |" in text
+    assert "0123456789abcdef" not in text  # full list stays in findings.json
+    de = render_reports(inp, None, tmp_path / "b")["de"].read_text()
+    assert "| Image | Kritisch | Hoch | Mittel | Niedrig | Workloads |" in de
+
+
+def test_vulnerability_images_are_read_from_the_bundle(tmp_path):
+    from k8s_baseline_audit.bundle import dump_json, write_bundle
+    from k8s_baseline_audit.report.render import vulnerability_images
+
+    trivy = {"Resources": [{"Kind": "Pod", "Name": "a", "Results": [
+        {"Target": "nginx:1 (debian 12)", "Vulnerabilities": [{"VulnerabilityID": "CVE-1"}]}]}]}
+    root = write_bundle(tmp_path / "b", {"scanners/trivy.json": dump_json(trivy)}, {})
+    f = _cve("0123456789abcdef", "CVE-1", Severity.HIGH, [])
+    f.evidence = [Evidence(file="scanners/trivy.json", json_path="$.Resources[0].Results[0].Vulnerabilities[0]")]
+    bad = _cve("0123456789abcde0", "CVE-2", Severity.HIGH, [])
+    bad.evidence = [Evidence(file="scanners/trivy.json", json_path="$.Resources[5].Results[0].Vulnerabilities[0]")]
+    assert vulnerability_images(load_bundle(root), [f, bad]) == {"0123456789abcdef": "nginx:1 (debian 12)"}
+
+
+def _scanner_finding(fid, check_id, name, sources=(Source.KUBESCAPE,)):
+    return Finding(
+        id=fid, check_id=check_id, title=Localized(de=f"T {check_id}", en=f"T {check_id}"),
+        severity=Severity.MEDIUM, resources=[ResourceRef(kind="Role", name=name, namespace="x")],
+        evidence=[Evidence(file="scanners/kubescape.json", json_path="$.results[0]")],
+        sources=list(sources), remediation=Localized(de="r", en="r"))
+
+
+def test_findings_are_grouped_per_check(report_input, tmp_path):
+    text = render_reports(report_input, None, tmp_path / "a")["en"].read_text()
+    sections = re.findall(r"^### \d+\. ", text, re.M)
+    assert len(sections) == len({f.check_id for f in report_input.findings})
+    assert len(_ids(text)) == len(report_input.findings)
+
+
+def test_scanner_only_findings_are_summarized(report_input, tmp_path):
+    extra = [_scanner_finding(f"00000000000000{i:02d}", "kubescape:C-0035", f"r{i}") for i in range(5)]
+    inp = replace(report_input, findings=[*report_input.findings, *extra])
+    text = render_reports(inp, None, tmp_path / "a")["en"].read_text()
+    assert ("| `kubescape:C-0035` | T kubescape:C-0035 | Medium | 5 | "
+            "`Role/x/r0`, `Role/x/r1`, `Role/x/r2` and 2 more |") in text
+    assert "0000000000000000" not in text
+    assert len(re.findall(r"^### \d+\. ", text, re.M)) == len({f.check_id for f in report_input.findings})
+
+
+def test_narrative_notes_attach_to_finding_rows(report_input, tmp_path):
+    scanner = _scanner_finding("00000000000000aa", "kubescape:C-0035", "r")
+    inp = replace(report_input, findings=[*report_input.findings, scanner])
+    n = {
+        lang: Narrative(language=lang, summary="S.",
+                        priorities={scanner.id: PriorityNote(rank=1, reason=f"why-{lang}")},
+                        fix_notes={scanner.id: f"note-{lang}"})
+        for lang in ("de", "en")
+    }
+    paths = render_reports(inp, n, tmp_path / "a")
+    en = paths["en"].read_text()
+    row = next(line for line in en.splitlines() if line.startswith("| `00000000000000aa` |"))
+    assert "1 – why-en (_AI-generated" in row and "note-en (_AI-generated" in row
+    first = re.search(r"^### 1\. (.*)$", en, re.M)[1]
+    assert first == "T kubescape:C-0035"  # ranked group comes first, as a full section
+    assert "| `00000000000000aa` |" in paths["de"].read_text()
+
+
+def test_disclaimer_states_non_affiliation(report_input, tmp_path):
+    paths = render_reports(report_input, None, tmp_path / "a")
+    assert "Nicht mit dem BSI verbunden oder von ihm unterstützt." in paths["de"].read_text()
+    assert "Not affiliated with or endorsed by the BSI." in paths["en"].read_text()
 
 
 def test_priority_order_note(report_input, tmp_path):
@@ -232,3 +312,18 @@ def test_narrative_rejects_inline_links(report_input):
     ids = {f.id for f in report_input.findings}
     with pytest.raises(NarrativeError, match="link syntax"):
         validate_narratives(_bad_narrative(report_input, "summary", "see [here](http://x)"), ids)
+
+
+def test_hostile_scanner_titles_and_images_do_not_break_structure(report_input, tmp_path):
+    def variant(text):
+        s = _scanner_finding("00000000000000bb", "kubescape:C-0035", "r")
+        s = s.model_copy(update={"title": Localized(de=text, en=text)})
+        v = _cve("00000000000000cc", "CVE-2024-0009", Severity.HIGH, [])
+        return replace(report_input, findings=[*report_input.findings, s, v],
+                       images={v.id: text})
+
+    good = render_reports(variant("plain"), None, tmp_path / "good")["en"].read_text()
+    bad = render_reports(variant(HOSTILE), None, tmp_path / "bad")["en"].read_text()
+    assert len(re.findall(r"^### ", bad, re.M)) == len(re.findall(r"^### ", good, re.M))
+    assert len(re.findall(r"^\|", bad, re.M)) == len(re.findall(r"^\|", good, re.M))
+    assert not re.search(r"^## Heading", bad, re.M)

@@ -38,26 +38,25 @@ _{{ L.ai_label }}_
 
 _{{ L.priority_note }}_
 {% endif %}
-{% for f in findings %}
+{% for g in groups %}
 
-### {{ loop.index }}. {{ f.title | attr(lang) | md }}
+### {{ loop.index }}. {{ g.first.title | attr(lang) | md }}
 
 | | |
 |---|---|
-| ID | {{ f.id | code }} |
-| {{ L.check }} | {{ f.check_id | code }} |
-| {{ L.severity }} | {{ L.sev[f.severity.value] }}{% if f.severity_unmapped %} ({{ L.unrated }}){% endif %} |
-| {{ L.priority }} | {% if narrative and f.id in narrative.priorities %}{{ narrative.priorities[f.id].rank }} – {{ narrative.priorities[f.id].reason | md }} (_{{ L.ai_label }}_){% else %}–{% endif %} |
-| {{ L.requirements }} | {{ f.requirements | map("md") | join(", ") if f.requirements else L.no_mapping }} |
-| {{ L.resources }} | {% for r in f.resources %}{{ r.key() | code }}{% if not loop.last %}, {% endif %}{% endfor %} |
-| {{ L.sources }} | {{ f.sources | map(attribute="value") | join(", ") }} |
-| {{ L.evidence }} | {% for e in f.evidence %}{{ e.file | code }} {{ e.json_path | code }}{% if not loop.last %}<br>{% endif %}{% endfor %} |
+| {{ L.check }} | {{ g.check_id | code }} |
+| {{ L.severity }} | {{ L.sev[g.severity.value] }}{% if g.unmapped %} ({{ L.unrated }}){% endif %} |
+| {{ L.requirements }} | {{ g.first.requirements | map("md") | join(", ") if g.first.requirements else L.no_mapping }} |
+| {{ L.sources }} | {{ g.sources | join(", ") }} |
+| {{ L.col_findings }} | {{ g.findings | length }} |
 
-**{{ L.fix }}:** {{ f.remediation | attr(lang) | md }}
-{% if narrative and f.id in narrative.fix_notes %}
+| ID | {{ L.resources }} | {{ L.evidence }} | {{ L.priority }} | {{ L.col_note }} |
+|---|---|---|---|---|
+{% for f in g.findings %}
+| {{ f.id | code }} | {% for r in f.resources %}{{ r.key() | code }}{% if not loop.last %}, {% endif %}{% endfor %} | {% for e in f.evidence %}{{ e.file | code }} {{ e.json_path | code }}{% if not loop.last %}<br>{% endif %}{% endfor %} | {% if narrative and f.id in narrative.priorities %}{{ narrative.priorities[f.id].rank }} – {{ narrative.priorities[f.id].reason | md }} (_{{ L.ai_label }}_){% else %}–{% endif %} | {% if narrative and f.id in narrative.fix_notes %}{{ narrative.fix_notes[f.id] | md }} (_{{ L.ai_label }}_){% else %}–{% endif %} |
+{% endfor %}
 
-_{{ L.ai_label }}:_ {{ narrative.fix_notes[f.id] }}
-{% endif %}
+**{{ L.fix }}:** {{ g.first.remediation | attr(lang) | md }}
 
 _{{ L.not_executed }}_
 {% else %}
@@ -65,13 +64,30 @@ _{{ L.not_executed }}_
 {{ L.no_findings }}
 {% endfor %}
 
+## {{ L.s_scanner_only }}
+
+{% if compact %}
+{{ L.scanner_only_note }}
+
+| {{ L.check }} | {{ L.col_title }} | {{ L.col_severity }} | {{ L.col_count }} | {{ L.col_examples }} |
+|---|---|---|---|---|
+{% for g in compact %}
+{% set keys = g.resource_keys %}
+| {{ g.check_id | code }} | {{ g.first.title | attr(lang) | md }} | {{ L.sev[g.severity.value] }}{% if g.unmapped %} ({{ L.unrated }}){% endif %} | {{ g.findings | length }} | {% for k in keys[:3] %}{{ k | code }}{% if not loop.last %}, {% endif %}{% endfor %}{% if keys | length > 3 %} {{ L.and_more.format(keys | length - 3) }}{% endif %} |
+{% endfor %}
+{% else %}
+{{ L.no_scanner_only }}
+{% endif %}
+
 ## {{ L.s_vulns }}
 
 {% if vulns %}
-| ID | {{ L.col_title }} | {{ L.col_severity }} | {{ L.col_resource }} |
-|---|---|---|---|
-{% for f in vulns %}
-| {{ f.id | code }} | {{ f.title | attr(lang) | md }} | {{ L.sev[f.severity.value] }} | {% if f.resources %}{{ f.resources[0].key() | code }}{% else %}–{% endif %} |
+{{ L.vulns_note }}
+
+| {{ L.col_image }} | {% for s in severities %}{{ L.sev[s] }} | {% endfor %}{{ L.col_workloads }} |
+|---|{% for s in severities %}---|{% endfor %}---|
+{% for v in vulns %}
+| {{ v.image | code }} | {% for s in severities %}{{ v.counts[s] }} | {% endfor %}{{ v.workloads }} |
 {% endfor %}
 {% else %}
 {{ L.no_vulns }}

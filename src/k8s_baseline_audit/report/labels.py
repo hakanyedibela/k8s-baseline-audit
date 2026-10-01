@@ -6,7 +6,8 @@ LABELS: dict[str, dict] = {
         "title": "Kubernetes-Sicherheitsaudit",
         "disclaimer": (
             "Dieser Bericht ist keine Zertifizierung und keine Rechtsberatung. "
-            "„Keine Abweichung festgestellt“ bedeutet nur, dass die automatischen Prüfungen nichts gefunden haben."
+            "„Keine Abweichung festgestellt“ bedeutet nur, dass die automatischen Prüfungen nichts gefunden haben. "
+            "Nicht mit dem BSI verbunden oder von ihm unterstützt."
         ),
         "cluster": "Cluster", "collected": "Erhebungszeitpunkt", "bundle_hash": "Bundle-Hash (SHA-256, manifest.json)",
         "provenance": "Herkunft", "verified": "Hashes geprüft",
@@ -15,7 +16,13 @@ LABELS: dict[str, dict] = {
         "scanners": "Scanner", "none": "keine", "unknown": "unbekannt",
         "priority_note": "Reihenfolge nach KI-generierter Priorität, vom Auditor zu prüfen.",
         "s_summary": "1. Management-Zusammenfassung", "s_matrix": "2. Abdeckungsmatrix",
-        "s_findings": "3. Befunde nach Priorität", "s_vulns": "3a. Image-Schwachstellen",
+        "s_findings": "3. Befunde nach Priorität", "s_scanner_only": "3a. Weitere Scanner-Befunde",
+        "s_vulns": "3b. Image-Schwachstellen",
+        "scanner_only_note": "Prüfungen, die nur ein Scanner meldet, zusammengefasst je Prüfung. Jeder einzelne Befund steht in findings.json.",
+        "no_scanner_only": "Keine weiteren Scanner-Befunde.",
+        "vulns_note": "Anzahl unterschiedlicher Schwachstellen-Kennungen je Image und Schweregrad. Die vollständige Liste steht in findings.json.",
+        "col_note": "Hinweis", "col_count": "Anzahl", "col_examples": "Beispiele", "col_image": "Image",
+        "col_workloads": "Workloads", "and_more": "und {} weitere",
         "s_questions": "4. Fragen für manuelle und organisatorische Anforderungen", "s_appendix": "5. Anhang",
         "s_not_checked": "5.1 Nicht geprüft", "s_preflight": "5.2 Berechtigungen bei der Erhebung",
         "s_exclusions": "5.3 Konfigurierte Ausnahmen", "s_evidence": "5.4 Nachweisverzeichnis",
@@ -43,7 +50,8 @@ LABELS: dict[str, dict] = {
         "title": "Kubernetes security audit",
         "disclaimer": (
             "This report is no certification and no legal advice. "
-            "\"No deviation found\" only means the automated checks found nothing."
+            "\"No deviation found\" only means the automated checks found nothing. "
+            "Not affiliated with or endorsed by the BSI."
         ),
         "cluster": "Cluster", "collected": "Collected at", "bundle_hash": "Bundle hash (SHA-256, manifest.json)",
         "provenance": "Provenance", "verified": "hashes verified",
@@ -52,7 +60,13 @@ LABELS: dict[str, dict] = {
         "scanners": "Scanners", "none": "none", "unknown": "unknown",
         "priority_note": "Order follows the AI-generated priority, to be reviewed by the auditor.",
         "s_summary": "1. Management summary", "s_matrix": "2. Coverage matrix",
-        "s_findings": "3. Findings by priority", "s_vulns": "3a. Image vulnerabilities",
+        "s_findings": "3. Findings by priority", "s_scanner_only": "3a. Other scanner findings",
+        "s_vulns": "3b. Image vulnerabilities",
+        "scanner_only_note": "Checks reported only by a scanner, summarized per check. Every single finding is in findings.json.",
+        "no_scanner_only": "No other scanner findings.",
+        "vulns_note": "Number of distinct vulnerability IDs per image and severity. The full list is in findings.json.",
+        "col_note": "Note", "col_count": "Count", "col_examples": "Examples", "col_image": "Image",
+        "col_workloads": "Workloads", "and_more": "and {} more",
         "s_questions": "4. Questions for manual and organizational requirements", "s_appendix": "5. Appendix",
         "s_not_checked": "5.1 Not checked", "s_preflight": "5.2 Permissions during collection",
         "s_exclusions": "5.3 Configured exclusions", "s_evidence": "5.4 Evidence index",

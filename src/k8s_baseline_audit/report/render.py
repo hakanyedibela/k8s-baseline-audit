@@ -4,7 +4,8 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
@@ -14,7 +15,7 @@ from pydantic import BaseModel, Field
 from ..analyze.pipeline import analysis_bytes, analyze, config_from_meta
 from ..bundle import Bundle
 from ..mapping.schema import Mapping, load_mapping
-from ..models import CoverageEntry, Finding, Source
+from ..models import CoverageEntry, Finding, Severity, Source
 from .labels import LABELS
 
 LANGS = ("de", "en")
@@ -109,6 +110,32 @@ class ReportInput:
     mapping: Mapping
     manifest: dict
     preflight: dict
+    images: dict[str, str] = field(default_factory=dict)  # vulnerability finding id -> image
+
+
+_TRIVY_RESULT = re.compile(r"^\$\.Resources\[(\d+)\]\.Results\[(\d+)\]\.")
+
+
+def vulnerability_images(bundle: Bundle, findings: list[Finding]) -> dict[str, str]:
+    """Image (trivy Result Target) of each vulnerability finding, read from the bundle."""
+    docs: dict[str, object] = {}
+    out: dict[str, str] = {}
+    for f in findings:
+        if not is_vulnerability(f) or not f.evidence:
+            continue
+        ev = f.evidence[0]
+        match = _TRIVY_RESULT.match(ev.json_path)
+        if not match or not bundle.has(ev.file):
+            continue
+        if ev.file not in docs:
+            docs[ev.file] = bundle.read_json(ev.file)
+        try:
+            target = docs[ev.file]["Resources"][int(match[1])]["Results"][int(match[2])]["Target"]
+        except (KeyError, IndexError, TypeError):
+            continue
+        if isinstance(target, str) and target:
+            out[f.id] = target
+    return out
 
 
 def load_report_input(analysis_dir: Path, bundle: Bundle) -> ReportInput:
@@ -133,12 +160,81 @@ def load_report_input(analysis_dir: Path, bundle: Bundle) -> ReportInput:
         mapping=mapping,
         manifest=bundle.manifest,
         preflight=bundle.preflight,
+        images=vulnerability_images(bundle, fresh.findings),
     )
 
 
-def _ordered(findings: list[Finding], narrative: Narrative | None) -> list[Finding]:
-    ranks = {k: v.rank for k, v in (narrative.priorities if narrative else {}).items()}
-    return sorted(findings, key=lambda f: (ranks.get(f.id, 10**6), f.severity.rank, f.check_id, f.id))
+NO_RANK = 10**6
+
+
+@dataclass(frozen=True)
+class FindingGroup:
+    """All findings of one check_id, in report order."""
+
+    check_id: str
+    findings: list[Finding]
+    rank: int
+
+    @property
+    def first(self) -> Finding:
+        return self.findings[0]
+
+    @property
+    def severity(self) -> Severity:
+        return min((f.severity for f in self.findings), key=lambda s: s.rank)
+
+    @property
+    def unmapped(self) -> bool:
+        return any(f.severity_unmapped for f in self.findings)
+
+    @property
+    def sources(self) -> list[str]:
+        return sorted({s.value for f in self.findings for s in f.sources})
+
+    @property
+    def resource_keys(self) -> list[str]:
+        return sorted({r.key() for f in self.findings for r in f.resources})
+
+
+@dataclass(frozen=True)
+class VulnRow:
+    image: str
+    counts: dict[str, int]  # severity -> distinct vulnerability ids
+    workloads: int
+
+
+def _ranks(narrative: Narrative | None) -> dict[str, int]:
+    return {k: v.rank for k, v in (narrative.priorities if narrative else {}).items()}
+
+
+def group_findings(findings: list[Finding], narrative: Narrative | None) -> list[FindingGroup]:
+    ranks = _ranks(narrative)
+    by_check: dict[str, list[Finding]] = {}
+    for f in findings:
+        by_check.setdefault(f.check_id, []).append(f)
+    groups = []
+    for check_id, items in by_check.items():
+        items = sorted(
+            items,
+            key=lambda f: (ranks.get(f.id, NO_RANK), f.severity.rank, [r.key() for r in f.resources], f.id),
+        )
+        groups.append(FindingGroup(check_id, items, min(ranks.get(f.id, NO_RANK) for f in items)))
+    return sorted(groups, key=lambda g: (g.rank, g.severity.rank, g.check_id))
+
+
+def vulnerability_rows(vulns: list[Finding], images: dict[str, str]) -> list[VulnRow]:
+    ids: dict[str, dict[str, set[str]]] = {}
+    workloads: dict[str, set[str]] = {}
+    for f in vulns:
+        image = images.get(f.id, "?")
+        ids.setdefault(image, {s.value: set() for s in Severity})[f.severity.value].add(f.check_id)
+        workloads.setdefault(image, set()).update(r.key() for r in f.resources)
+    rows = [
+        VulnRow(image, {sev: len(found) for sev, found in counts.items()}, len(workloads[image]))
+        for image, counts in ids.items()
+    ]
+    order = [s.value for s in Severity]
+    return sorted(rows, key=lambda r: ([-r.counts[s] for s in order], r.image))
 
 
 def render_reports(inp: ReportInput, narratives: dict[str, Narrative] | None, out_dir: Path) -> dict[str, Path]:
@@ -155,17 +251,25 @@ def render_reports(inp: ReportInput, narratives: dict[str, Narrative] | None, ou
     env.filters["md"] = md
     env.filters["code"] = code
     template = env.get_template("report.md.j2")
-    ordered = _ordered(inp.findings, narratives.get("en"))
-    main = [f for f in ordered if not is_vulnerability(f)]
-    vulns = [f for f in ordered if is_vulnerability(f)]
+    narrative = narratives.get("en")
+    noted = set(narrative.priorities) | set(narrative.fix_notes) if narrative else set()
+    groups = group_findings([f for f in inp.findings if not is_vulnerability(f)], narrative)
+    # Built-in checks, and scanner checks the narrative comments on, get a full section.
+    # Other scanner-only checks are summarized; findings.json keeps every finding.
+    detailed: list[FindingGroup] = []
+    compact: list[FindingGroup] = []
+    for g in groups:
+        full = any(Source.BUILTIN in f.sources or f.id in noted for f in g.findings)
+        (detailed if full else compact).append(g)
+    vulns = vulnerability_rows([f for f in inp.findings if is_vulnerability(f)], inp.images)
     skipped = [r for r in inp.runs if r["state"] != "ran"]
     out_dir.mkdir(parents=True, exist_ok=True)
     paths: dict[str, Path] = {}
     for lang in LANGS:
         text = template.render(
-            lang=lang, L=LABELS[lang], meta=inp.meta, findings=main, vulns=vulns, coverage=inp.coverage,
-            req=inp.mapping.get, narrative=narratives.get(lang), skipped=skipped,
-            preflight=inp.preflight, manifest=inp.manifest,
+            lang=lang, L=LABELS[lang], meta=inp.meta, groups=detailed, compact=compact, vulns=vulns,
+            severities=[s.value for s in Severity], coverage=inp.coverage, req=inp.mapping.get,
+            narrative=narratives.get(lang), skipped=skipped, preflight=inp.preflight, manifest=inp.manifest,
         )
         path = out_dir / f"report.{lang}.md"
         path.write_text(text, encoding="utf-8")
