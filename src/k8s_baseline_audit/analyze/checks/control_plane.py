@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import functools
 import re
+from collections.abc import Callable
 from datetime import date
 from importlib.resources import files
 from urllib.parse import urlparse
@@ -25,7 +26,9 @@ def parse_flags(container: dict) -> dict[str, str]:
     return flags
 
 
-def _static_pod(ctx: CheckContext, component: str) -> tuple[int, dict, dict[str, str]]:
+def _static_pods(ctx: CheckContext, component: str) -> list[tuple[int, dict, dict[str, str]]]:
+    """Every visible static pod of a component (HA control planes have several)."""
+    found = []
     for i, p in enumerate(ctx.items("pods")):
         md = p.get("metadata") or {}
         if (
@@ -33,14 +36,21 @@ def _static_pod(ctx: CheckContext, component: str) -> tuple[int, dict, dict[str,
             and (md.get("labels") or {}).get("component") == component
         ):
             containers = spec_of(p).get("containers") or [{}]
-            return i, p, parse_flags(containers[0] or {})
-    raise ManualCheckNeeded(
-        f"{component} static pod not visible: managed cluster or no access to kube-system pods"
-    )
+            found.append((i, p, parse_flags(containers[0] or {})))
+    if not found:
+        raise ManualCheckNeeded(
+            f"{component} static pod not visible: managed cluster or no access to kube-system pods"
+        )
+    return found
 
 
-def _api_hit(i: int, p: dict) -> list[Hit]:
-    return [Hit(meta_ref("Pod", p), ev("pods", f"$.items[{i}].spec.containers[0].command"))]
+def _hits(ctx: CheckContext, component: str, bad: Callable[[dict[str, str]], bool]) -> list[Hit]:
+    """One Hit per static pod of the component whose flags are bad."""
+    return [
+        Hit(meta_ref("Pod", p), ev("pods", f"$.items[{i}].spec.containers[0].command"))
+        for i, p, flags in _static_pods(ctx, component)
+        if bad(flags)
+    ]
 
 
 @check(
@@ -53,8 +63,7 @@ def _api_hit(i: int, p: dict) -> list[Hit]:
     "Create an EncryptionConfiguration and set --encryption-provider-config on the API server.",
 )
 def encryption_at_rest(ctx: CheckContext) -> list[Hit]:
-    i, p, flags = _static_pod(ctx, "kube-apiserver")
-    return [] if flags.get("encryption-provider-config") else _api_hit(i, p)
+    return _hits(ctx, "kube-apiserver", lambda f: not f.get("encryption-provider-config"))
 
 
 @check(
@@ -67,8 +76,7 @@ def encryption_at_rest(ctx: CheckContext) -> list[Hit]:
     "Set --anonymous-auth=false; first confirm health probes do not rely on anonymous access.",
 )
 def anonymous_auth(ctx: CheckContext) -> list[Hit]:
-    i, p, flags = _static_pod(ctx, "kube-apiserver")
-    return [] if flags.get("anonymous-auth") == "false" else _api_hit(i, p)
+    return _hits(ctx, "kube-apiserver", lambda f: f.get("anonymous-auth") != "false")
 
 
 @check(
@@ -81,9 +89,11 @@ def anonymous_auth(ctx: CheckContext) -> list[Hit]:
     "Set --audit-policy-file and --audit-log-path and ship the logs centrally.",
 )
 def audit_logging(ctx: CheckContext) -> list[Hit]:
-    i, p, flags = _static_pod(ctx, "kube-apiserver")
-    enabled = flags.get("audit-policy-file") and flags.get("audit-log-path")
-    return [] if enabled else _api_hit(i, p)
+    return _hits(
+        ctx,
+        "kube-apiserver",
+        lambda f: not (f.get("audit-policy-file") and f.get("audit-log-path")),
+    )
 
 
 @check(
@@ -97,10 +107,11 @@ def audit_logging(ctx: CheckContext) -> list[Hit]:
     "Restrict port 2379 to control plane nodes by firewall, or bind to 127.0.0.1 only.",
 )
 def etcd_listen_non_loopback(ctx: CheckContext) -> list[Hit]:
-    i, p, flags = _static_pod(ctx, "etcd")
-    urls = [u for u in (flags.get("listen-client-urls") or "").split(",") if u]
-    exposed = [u for u in urls if (urlparse(u).hostname or "") not in LOOPBACK]
-    return _api_hit(i, p) if exposed else []
+    def exposed(flags: dict[str, str]) -> bool:
+        urls = [u for u in (flags.get("listen-client-urls") or "").split(",") if u]
+        return any((urlparse(u).hostname or "") not in LOOPBACK for u in urls)
+
+    return _hits(ctx, "etcd", exposed)
 
 
 @functools.cache

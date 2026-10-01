@@ -133,3 +133,29 @@ def test_packaged_table_is_well_formed():
     for key, value in t["releases"].items():
         assert key.count(".") == 1
         date.fromisoformat(value)
+
+
+def _ha(component, first, second):
+    a = static(component, first)
+    b = static(component, second)
+    b["metadata"]["name"] = f"{component}-cp2"
+    return [a, b]
+
+
+@pytest.mark.parametrize("check_id", CP_CHECKS)
+def test_ha_apiservers_are_all_checked(check_id):
+    pods = _ha("kube-apiserver", HARDENED_API, KUBEADM_DEFAULT_API)
+    hits = run_check(check_id, ctx(pods=pods))
+    assert [h.resource.key() for h in hits] == ["Pod/kube-system/kube-apiserver-cp2"]
+    assert hits[0].evidence.json_path == "$.items[1].spec.containers[0].command"
+    default = _ha("kube-apiserver", KUBEADM_DEFAULT_API, KUBEADM_DEFAULT_API)
+    both = run_check(check_id, ctx(pods=default))
+    assert len(both) == 2
+
+
+def test_ha_etcd_members_are_all_checked():
+    hits = run_check(
+        "control_plane.etcd_listen_non_loopback",
+        ctx(pods=_ha("etcd", ETCD_LOOPBACK, ETCD_EXPOSED)),
+    )
+    assert [h.resource.key() for h in hits] == ["Pod/kube-system/etcd-cp2"]

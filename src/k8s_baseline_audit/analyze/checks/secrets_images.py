@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from ...collect.redact import CREDENTIAL_NAME  # noqa: I001
 from ...models import Severity
 from .base import (
@@ -70,6 +72,10 @@ def env_secret_ref(ctx: CheckContext) -> list[Hit]:
     return hits
 
 
+# FOO_PASSWORD_FILE and friends point at a mounted file or directory, not the credential.
+_POINTER = re.compile(r"_(FILE|PATH|DIR)$", re.IGNORECASE)
+
+
 @check(
     "secrets.credential_literal_env",
     POD,
@@ -85,7 +91,8 @@ def credential_literal_env(ctx: CheckContext) -> list[Hit]:
         for field_name, j, c in iter_containers(p):
             for k, e in enumerate(c.get("env") or []):
                 e = e or {}
-                if e.get("value") and CREDENTIAL_NAME.search(e.get("name") or ""):
+                name = e.get("name") or ""
+                if e.get("value") and CREDENTIAL_NAME.search(name) and not _POINTER.search(name):
                     path = container_path(i, field_name, j) + f".env[{k}]"
                     hits.append(Hit(meta_ref("Pod", p), ev("pods", path)))
     return hits

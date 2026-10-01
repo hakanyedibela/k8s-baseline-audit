@@ -55,6 +55,13 @@ def test_credential_literal_env_redacted_or_raw():
     ]
 
 
+def test_credential_env_pointing_to_a_file_or_dir_is_not_flagged():
+    names = ["POSTGRES_PASSWORD_FILE", "api_token_path", "SECRET_DIR", "DB_PASSWORD"]
+    c = hardened_container(env=[{"name": n, "value": "/run/secrets/x"} for n in names])
+    hits = run_check("secrets.credential_literal_env", ctx(pods=[pod(containers=[c])]))
+    assert [h.evidence.json_path for h in hits] == ["$.items[0].spec.containers[0].env[3]"]
+
+
 def test_latest_and_digest():
     pods = [
         pod(
