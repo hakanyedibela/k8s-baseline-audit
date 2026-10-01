@@ -7,8 +7,8 @@ name = "k8s-baseline-audit"
 version = "0.1.0"
 description = "Read-only Kubernetes security audit mapped to BSI IT-Grundschutz APP.4.4 and SYS.1.6"
 readme = "README.md"
-license = "Apache-2.0"
-license-files = ["LICENSE"]
+license = "Apache-2.0 AND CC-BY-NC-4.0"
+license-files = ["LICENSE", "LICENSE-MAPPING"]
 requires-python = ">=3.11"
 authors = [{ name = "Hakan Yedibela" }]
 keywords = ["kubernetes", "security", "audit", "bsi", "grundschutz", "compliance"]

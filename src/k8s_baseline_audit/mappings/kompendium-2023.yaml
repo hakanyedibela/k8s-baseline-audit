@@ -2,6 +2,10 @@
 # Titles and summaries are own paraphrases, not BSI text. Only requirement IDs
 # and levels are taken from the source documents. Sources: see
 # docs/superpowers/specs/2026-09-30-k8s-baseline-audit-design.md, section 16.
+#
+# Copyright (c) 2026 Hakan Yedibela. This mapping file (titles, summaries,
+# questions, check assignments) is licensed under CC BY-NC 4.0, see
+# LICENSE-MAPPING. The tool's code is Apache-2.0, see LICENSE.
 name: kompendium-2023
 framework: BSI IT-Grundschutz-Kompendium
 edition: "2023"
