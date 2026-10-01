@@ -24,6 +24,29 @@ jobs:
       - run: shellcheck -s sh scripts/export-bundle.sh scripts/install-skill.sh
       - run: pdm run pytest -v
 
+  export-script-jq16:
+    # export-bundle.sh promises jq 1.6+. Run its parity tests with the oldest supported jq.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pdm-project/setup-pdm@v4
+        with:
+          python-version: "3.12"
+      - name: Install jq 1.6 first on PATH
+        run: |
+          mkdir -p "$RUNNER_TEMP/jq16"
+          curl -fsSL -o "$RUNNER_TEMP/jq16/jq" \
+            https://github.com/jqlang/jq/releases/download/jq-1.6/jq-linux64
+          # sha256 from https://raw.githubusercontent.com/jqlang/jq/master/sig/v1.6/sha256sum.txt
+          # (linked as "checksums" from https://jqlang.github.io/jq/download/)
+          echo "af986793a515d500ab2d35f8d2aecd656e764504b789b66d7e1a0b727a124c44  $RUNNER_TEMP/jq16/jq" \
+            | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/jq16/jq"
+          echo "$RUNNER_TEMP/jq16" >> "$GITHUB_PATH"
+      - run: test "$(jq --version)" = jq-1.6
+      - run: pdm install
+      - run: pdm run pytest -v tests/test_export_script.py
+
   integration:
     runs-on: ubuntu-latest
     needs: unit
