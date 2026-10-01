@@ -199,6 +199,26 @@ def test_unknown_format_is_rejected(rel, doc):
         parse_scanner_file(rel, doc)
 
 
+@pytest.mark.parametrize(
+    "rel,doc",
+    [
+        ("scanners/kube-bench-a.json", {"Controls": ["x"]}),
+        ("scanners/kube-bench-a.json", {"Controls": [{"tests": ["x"]}]}),
+        ("scanners/kube-bench-a.json", {"Controls": [{"tests": [{"results": [1]}]}]}),
+        ("scanners/kubescape.json", {"results": ["x"]}),
+        ("scanners/kubescape.json", {"results": [{"controls": ["x"]}]}),
+        ("scanners/kubescape.json", {"results": [], "resources": ["x"]}),
+        ("scanners/trivy.json", {"Resources": ["x"]}),
+        ("scanners/trivy.json", {"Resources": [{"Results": ["x"]}]}),
+        ("scanners/trivy.json", {"Resources": [{"Results": [{"Secrets": ["x"]}]}]}),
+        ("scanners/trivy.json", {"Resources": [{"Results": [{"Vulnerabilities": "abc"}]}]}),
+    ],
+)
+def test_non_object_entries_are_rejected(rel, doc):
+    with pytest.raises(ScannerFormatError, match="expected a list of objects"):
+        parse_scanner_file(rel, doc)
+
+
 def test_unknown_scanner_file_is_rejected():
     with pytest.raises(ScannerFormatError, match="unknown scanner file"):
         parse_scanner_file("scanners/grype.json", {})

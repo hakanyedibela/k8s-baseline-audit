@@ -1,6 +1,7 @@
 import json
 import shutil
 
+import pytest
 from fakes import FakeKubectl
 from typer.testing import CliRunner
 
@@ -187,4 +188,104 @@ def test_invalid_kube_bench_file_exits_2(tmp_path, monkeypatch):
     )
     assert result.exit_code == 2
     assert "error: kube-bench result is not valid JSON" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+# --- I1: report verifies the analysis against a fresh run -----------------------------------
+
+
+def _report(a, bundle, tmp_path):
+    return runner.invoke(
+        cli.app, ["report", str(a), "--bundle", str(bundle), "--out", str(tmp_path / "r")]
+    )
+
+
+def test_report_accepts_untouched_analysis(sample_bundle, tmp_path):
+    a = _analyzed(sample_bundle, tmp_path)
+    result = _report(a, sample_bundle, tmp_path)
+    assert result.exit_code == 0, result.stderr
+
+
+def test_report_rejects_downgraded_severity(sample_bundle, tmp_path):
+    a = _analyzed(sample_bundle, tmp_path)
+    doc = json.loads((a / "findings.json").read_text())
+    critical = next(f for f in doc["findings"] if f["severity"] == "critical")
+    critical["severity"] = "low"
+    (a / "findings.json").write_text(json.dumps(doc, indent=2, sort_keys=True) + "\n")
+    result = _report(a, sample_bundle, tmp_path)
+    assert result.exit_code == 2
+    assert "analysis files do not match a fresh analysis of the bundle" in result.stderr
+    assert not (tmp_path / "r").exists()
+
+
+def test_report_rejects_dropped_coverage_row(sample_bundle, tmp_path):
+    a = _analyzed(sample_bundle, tmp_path)
+    doc = json.loads((a / "coverage.json").read_text())
+    doc["coverage"].pop(0)
+    (a / "coverage.json").write_text(json.dumps(doc, indent=2, sort_keys=True) + "\n")
+    result = _report(a, sample_bundle, tmp_path)
+    assert result.exit_code == 2
+    assert "analysis files do not match a fresh analysis of the bundle" in result.stderr
+
+
+def test_report_honours_recorded_config(sample_bundle, tmp_path):
+    a = tmp_path / "a"
+    runner.invoke(
+        cli.app,
+        ["analyze", str(sample_bundle), "--out", str(a), "--registry-allowlist", "docker.io"],
+    )
+    result = _report(a, sample_bundle, tmp_path)
+    assert result.exit_code == 0, result.stderr
+
+
+# --- I2: unexpected errors exit 2 without a traceback ----------------------------------------
+
+
+def _bundle_with(tmp_path, rel, doc):
+    from k8s_baseline_audit.bundle import dump_json, write_bundle
+
+    files = {
+        "resources/version.json": dump_json({"serverVersion": {"major": "1", "minor": "35"}}),
+        "preflight.json": dump_json({}),
+        "errors.json": dump_json({"errors": []}),
+        rel: dump_json(doc),
+    }
+    manifest = {"producer": "collector", "created_at": "2026-09-30T10:00:00Z", "cluster": {}}
+    return write_bundle(tmp_path / "bundle", files, manifest)
+
+
+def test_analyze_non_object_pod_item_exits_2(tmp_path):
+    b = _bundle_with(tmp_path, "resources/pods.json", {"items": ["garbage"]})
+    result = runner.invoke(cli.app, ["analyze", str(b), "--out", str(tmp_path / "a")])
+    assert result.exit_code == 2
+    assert "error: resources/pods.json: items must be objects" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_analyze_non_object_kube_bench_control_exits_2(tmp_path):
+    b = _bundle_with(tmp_path, "scanners/kube-bench-n1.json", {"Controls": ["x"]})
+    result = runner.invoke(cli.app, ["analyze", str(b), "--out", str(tmp_path / "a")])
+    assert result.exit_code == 2
+    assert "error: scanners/kube-bench-n1.json" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+@pytest.mark.parametrize("command", ["collect", "analyze", "report"])
+def test_unexpected_exception_is_internal_error(command, sample_bundle, tmp_path, monkeypatch):
+    def boom(*_a, **_k):
+        raise ZeroDivisionError("kaputt")
+
+    a = _analyzed(sample_bundle, tmp_path)
+    if command == "collect":
+        monkeypatch.setattr(cli, "collect_bundle", boom)
+        args = ["collect", "--out", str(tmp_path / "c"), "--no-scanners"]
+    elif command == "analyze":
+        monkeypatch.setattr(cli, "run_analysis", boom)
+        args = ["analyze", str(sample_bundle), "--out", str(tmp_path / "x")]
+    else:
+        monkeypatch.setattr(cli, "render_reports", boom)
+        args = ["report", str(a), "--bundle", str(sample_bundle), "--out", str(tmp_path / "r")]
+    result = runner.invoke(cli.app, args)
+    assert result.exit_code == 2
+    assert "error: internal error: ZeroDivisionError: kaputt" in result.stderr
     assert "Traceback" not in result.stderr

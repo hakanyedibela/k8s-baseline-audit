@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from datetime import date
 from pathlib import Path
 from typing import Literal
 
@@ -43,6 +44,8 @@ def load_resources(bundle: Bundle) -> dict[str, list[dict]]:
             continue
         if not isinstance(doc, dict) or not isinstance(doc.get("items"), list):
             raise BundleFormatError(f"{rel}: expected a kubectl List with an items array")
+        if not all(isinstance(item, dict) for item in doc["items"]):
+            raise BundleFormatError(f"{rel}: items must be objects")
         out[kind] = doc["items"]
     return out
 
@@ -138,20 +141,35 @@ def analyze(
     return AnalysisResult(meta, findings, sorted(runs, key=lambda r: r.check_id), coverage)
 
 
+def analysis_bytes(result: AnalysisResult) -> tuple[bytes, bytes]:
+    """The exact bytes of findings.json and coverage.json for this result."""
+    findings = dump_json(
+        {
+            "meta": result.meta,
+            "findings": [f.model_dump(mode="json") for f in result.findings],
+            "check_runs": [asdict(r) for r in result.runs],
+        }
+    )
+    coverage = dump_json({"coverage": [c.model_dump(mode="json") for c in result.coverage]})
+    return findings, coverage
+
+
+def config_from_meta(config: dict) -> AnalyzerConfig:
+    """Rebuild the AnalyzerConfig recorded in findings.json meta.config."""
+    return AnalyzerConfig(
+        as_of=date.fromisoformat(config["as_of"]),
+        registry_allowlist=tuple(config["registry_allowlist"]),
+        admin_subject_allowlist=tuple(config["admin_subject_allowlist"]),
+        anonymous_binding_allowlist=tuple(config["anonymous_binding_allowlist"]),
+        system_namespaces=tuple(config["system_namespaces"]),
+    )
+
+
 def write_analysis(result: AnalysisResult, out_dir: Path) -> tuple[Path, Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     findings_path = out_dir / "findings.json"
     coverage_path = out_dir / "coverage.json"
-    findings_path.write_bytes(
-        dump_json(
-            {
-                "meta": result.meta,
-                "findings": [f.model_dump(mode="json") for f in result.findings],
-                "check_runs": [asdict(r) for r in result.runs],
-            }
-        )
-    )
-    coverage_path.write_bytes(
-        dump_json({"coverage": [c.model_dump(mode="json") for c in result.coverage]})
-    )
+    findings, coverage = analysis_bytes(result)
+    findings_path.write_bytes(findings)
+    coverage_path.write_bytes(coverage)
     return findings_path, coverage_path

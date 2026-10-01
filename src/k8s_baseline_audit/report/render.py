@@ -11,6 +11,7 @@ from typing import Literal
 from jinja2 import Environment, PackageLoader, StrictUndefined
 from pydantic import BaseModel, Field
 
+from ..analyze.pipeline import analysis_bytes, analyze, config_from_meta
 from ..bundle import Bundle
 from ..mapping.schema import Mapping, load_mapping
 from ..models import CoverageEntry, Finding, Source
@@ -33,6 +34,10 @@ class Narrative(BaseModel):
 
 class NarrativeError(ValueError):
     """Narratives are inconsistent with the analysis or with each other."""
+
+
+class AnalysisMismatchError(ValueError):
+    """findings.json / coverage.json differ from a fresh analysis of the bundle."""
 
 
 FORBIDDEN_WORDS = ("erfüllt", "fulfilled", "compliant", "konform")
@@ -107,17 +112,25 @@ class ReportInput:
 
 
 def load_report_input(analysis_dir: Path, bundle: Bundle) -> ReportInput:
-    findings_doc = json.loads((analysis_dir / "findings.json").read_text(encoding="utf-8"))
-    coverage_doc = json.loads((analysis_dir / "coverage.json").read_text(encoding="utf-8"))
+    findings_bytes = (analysis_dir / "findings.json").read_bytes()
+    coverage_bytes = (analysis_dir / "coverage.json").read_bytes()
+    findings_doc = json.loads(findings_bytes.decode("utf-8"))
+    coverage_doc = json.loads(coverage_bytes.decode("utf-8"))
     meta = findings_doc["meta"]
     if meta["bundle"]["manifest_sha256"] != bundle.manifest_sha256():
         raise ValueError("analysis was produced from a different bundle (manifest hash mismatch)")
+    # The report must never show anything the analyzer would not produce for this bundle:
+    # rerun the analysis with the recorded settings and require identical bytes.
+    mapping = load_mapping(meta["mapping"]["name"])
+    fresh = analyze(bundle, mapping, config_from_meta(meta["config"]), tool_version=meta["tool"]["version"])
+    if analysis_bytes(fresh) != (findings_bytes, coverage_bytes):
+        raise AnalysisMismatchError("analysis files do not match a fresh analysis of the bundle")
     return ReportInput(
         meta=meta,
         findings=[Finding.model_validate(f) for f in findings_doc["findings"]],
         runs=findings_doc["check_runs"],
         coverage=[CoverageEntry.model_validate(c) for c in coverage_doc["coverage"]],
-        mapping=load_mapping(meta["mapping"]["name"]),
+        mapping=mapping,
         manifest=bundle.manifest,
         preflight=bundle.preflight,
     )

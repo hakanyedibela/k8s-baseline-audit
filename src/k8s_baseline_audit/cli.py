@@ -39,6 +39,10 @@ def _fail(message: str) -> typer.Exit:
     return typer.Exit(EXIT_ERROR)
 
 
+def _internal(exc: BaseException) -> typer.Exit:
+    return _fail(f"internal error: {type(exc).__name__}: {exc}")
+
+
 def _make_runner(context: str | None) -> KubectlRunner:
     return KubectlRunner(context=context)
 
@@ -104,6 +108,8 @@ def collect(
         collected = [r for r in bundle.files_under("resources/") if r != "resources/version.json"]
     except (BundleFormatError, BundleIntegrityError, ValueError, OSError) as exc:
         raise _fail(str(exc)) from exc
+    except Exception as exc:
+        raise _internal(exc) from exc
     for err in collected_errors:
         typer.echo(f"warning: {err['resource']}: {err['reason']}", err=True)
     if not collected:
@@ -152,6 +158,8 @@ def analyze(
         OSError,
     ) as exc:
         raise _fail(str(exc)) from exc
+    except Exception as exc:
+        raise _internal(exc) from exc
     typer.echo(str(findings_path))
     typer.echo(str(coverage_path))
     worst = any(f.severity.at_or_above(fail_on) for f in result.findings)
@@ -193,5 +201,7 @@ def report(
         OSError,
     ) as exc:
         raise _fail(str(exc)) from exc
+    except Exception as exc:
+        raise _internal(exc) from exc
     for path in paths.values():
         typer.echo(str(path))

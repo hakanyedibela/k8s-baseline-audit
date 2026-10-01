@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ...models import Evidence, Finding, ResourceRef, Severity, Source
-from .common import ScannerFormatError, make_finding, same
+from .common import ScannerFormatError, entries, make_finding, same
 
 STATUS_SEVERITY = {"FAIL": Severity.MEDIUM, "WARN": Severity.LOW}
 
@@ -12,9 +12,10 @@ def parse(doc: dict, rel: str, node: str) -> list[Finding]:
         raise ScannerFormatError(f"{rel}: expected top-level 'Controls' list (kube-bench JSON)")
     ref = ResourceRef(kind="Node", name=node)
     out: list[Finding] = []
-    for i, control in enumerate(controls):
-        for j, test in enumerate(control.get("tests") or []):
-            for k, result in enumerate(test.get("results") or []):
+    for i, control in enumerate(entries(controls, f"{rel}: Controls")):
+        for j, test in enumerate(entries(control.get("tests"), f"{rel}: Controls[{i}].tests")):
+            where = f"{rel}: Controls[{i}].tests[{j}].results"
+            for k, result in enumerate(entries(test.get("results"), where)):
                 severity = STATUS_SEVERITY.get(result.get("status"))
                 if severity is None:
                     continue

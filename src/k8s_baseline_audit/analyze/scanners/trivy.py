@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ...models import Evidence, Finding, Localized, ResourceRef, Source
-from .common import ScannerFormatError, make_finding, map_severity, same
+from .common import ScannerFormatError, entries, make_finding, map_severity, same
 
 
 def parse(doc: dict, rel: str) -> list[Finding]:
@@ -9,15 +9,17 @@ def parse(doc: dict, rel: str) -> list[Finding]:
     if not isinstance(resources, list):
         raise ScannerFormatError(f"{rel}: expected top-level 'Resources' list (trivy k8s JSON)")
     out: list[Finding] = []
-    for i, r in enumerate(resources):
+    for i, r in enumerate(entries(resources, f"{rel}: Resources")):
         ref = ResourceRef(
             kind=r.get("Kind") or "Unknown",
             name=r.get("Name") or "?",
             namespace=r.get("Namespace") or None,
         )
-        for j, result in enumerate(r.get("Results") or []):
+        for j, result in enumerate(entries(r.get("Results"), f"{rel}: Resources[{i}].Results")):
             base = f"$.Resources[{i}].Results[{j}]"
-            for k, m in enumerate(result.get("Misconfigurations") or []):
+            where = f"{rel}: {base}"
+            misconfigs = entries(result.get("Misconfigurations"), f"{where}.Misconfigurations")
+            for k, m in enumerate(misconfigs):
                 if m.get("Status", "FAIL") != "FAIL":
                     continue
                 cid = f"trivy:{m.get('ID') or m.get('AVDID') or 'unknown'}"
@@ -34,7 +36,8 @@ def parse(doc: dict, rel: str) -> list[Finding]:
                         same(m.get("Resolution") or ""),
                     )
                 )
-            for k, v in enumerate(result.get("Vulnerabilities") or []):
+            vulns = entries(result.get("Vulnerabilities"), f"{where}.Vulnerabilities")
+            for k, v in enumerate(vulns):
                 vid = v.get("VulnerabilityID") or "unknown"
                 sev, unmapped = map_severity(v.get("Severity"))
                 title = f"{vid} in {v.get('PkgName', '?')} {v.get('InstalledVersion', '')}".strip()
@@ -61,7 +64,8 @@ def parse(doc: dict, rel: str) -> list[Finding]:
                         fix,
                     )
                 )
-            for k, s in enumerate(result.get("Secrets") or []):
+            secrets = entries(result.get("Secrets"), f"{where}.Secrets")
+            for k, s in enumerate(secrets):
                 cid = f"trivy:secret:{s.get('RuleID') or 'unknown'}"
                 sev, unmapped = map_severity(s.get("Severity"))
                 out.append(

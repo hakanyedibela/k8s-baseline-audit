@@ -172,3 +172,13 @@ def test_not_run_checks_never_yield_no_deviation(sample_bundle, tmp_path):
         assert entry.status == CoverageStatus.NOT_CHECKED
         assert any("forbidden" in reason for reason in entry.reasons)
     assert checked > 0
+
+
+def test_non_object_items_are_rejected(tmp_path):
+    from k8s_baseline_audit.bundle import dump_json, write_bundle
+
+    root = write_bundle(
+        tmp_path / "b", {"resources/pods.json": dump_json({"items": ["garbage"]})}, {}
+    )
+    with pytest.raises(BundleFormatError, match="items must be objects"):
+        load_resources(load_bundle(root))
