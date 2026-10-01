@@ -126,3 +126,12 @@ def test_usage_errors(tmp_path):
     assert _install("claude", tmp_path, "--project").returncode == 2
     assert _install("claude", tmp_path, "--bogus").returncode == 2
     assert _install("", tmp_path).returncode == 2
+
+
+def test_skill_handles_kubeconfig_without_current_context():
+    _, body = _split()
+    step1 = body.split("## Step 1", 1)[1].split("## Step 2", 1)[0]
+    assert "current-context is not set" in step1
+    assert "kubectl config get-contexts" in step1
+    assert "KUBECONFIG" in step1
+    assert "--context" in step1

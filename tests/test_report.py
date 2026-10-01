@@ -368,3 +368,34 @@ def test_no_prioritized_vulnerability_table_without_narrative_notes(report_input
     inp = replace(report_input, findings=[*report_input.findings, crit], images={})
     en = render_reports(inp, None, tmp_path / "out")["en"].read_text()
     assert "Prioritized vulnerabilities" not in en
+
+
+def test_language_package_targets_name_their_image_or_workload(tmp_path):
+    from k8s_baseline_audit.bundle import dump_json, write_bundle
+    from k8s_baseline_audit.report.render import vulnerability_images
+
+    lang = {"Target": "Python", "Class": "lang-pkgs", "Vulnerabilities": [{"VulnerabilityID": "CVE-1"}]}
+    os_pkgs = {"Target": "nginx:1 (debian 12)", "Class": "os-pkgs", "Vulnerabilities": [{"VulnerabilityID": "CVE-2"}]}
+    trivy = {"Resources": [
+        {"Kind": "Job", "Namespace": "sgb3", "Name": "boot", "Metadata": [{"RepoTags": ["sgb3-backend:local"]}],
+         "Results": [lang, os_pkgs]},
+        {"Kind": "Pod", "Namespace": "x", "Name": "nometa", "Results": [lang]},
+        {"Kind": "Pod", "Namespace": "x", "Name": "two",
+         "Metadata": [{"RepoTags": ["a:1"]}, {"RepoTags": ["b:1"]}], "Results": [lang]},
+    ]}
+    root = write_bundle(tmp_path / "b", {"scanners/trivy.json": dump_json(trivy)}, {})
+
+    def at(fid, i, j):
+        f = _cve(fid, "CVE-1", Severity.HIGH, [])
+        f.evidence = [Evidence(file="scanners/trivy.json", json_path=f"$.Resources[{i}].Results[{j}].Vulnerabilities[0]")]
+        return f
+
+    found = vulnerability_images(load_bundle(root), [
+        at("000000000000000a", 0, 0), at("000000000000000b", 0, 1),
+        at("000000000000000c", 1, 0), at("000000000000000d", 2, 0)])
+    assert found == {
+        "000000000000000a": "sgb3-backend:local (Python)",
+        "000000000000000b": "nginx:1 (debian 12)",
+        "000000000000000c": "Pod/x/nometa (Python)",
+        "000000000000000d": "Pod/x/two (Python)",
+    }

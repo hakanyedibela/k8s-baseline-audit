@@ -130,12 +130,28 @@ def vulnerability_images(bundle: Bundle, findings: list[Finding]) -> dict[str, s
         if ev.file not in docs:
             docs[ev.file] = bundle.read_json(ev.file)
         try:
-            target = docs[ev.file]["Resources"][int(match[1])]["Results"][int(match[2])]["Target"]
+            resource = docs[ev.file]["Resources"][int(match[1])]
+            result = resource["Results"][int(match[2])]
+            target = result["Target"]
         except (KeyError, IndexError, TypeError):
             continue
         if isinstance(target, str) and target:
-            out[f.id] = target
+            out[f.id] = _scan_target(resource, result, target)
     return out
+
+
+def _scan_target(resource: dict, result: dict, target: str) -> str:
+    """OS-package targets already name the image; language packages get it added."""
+    if result.get("Class") != "lang-pkgs":
+        return target
+    meta = resource.get("Metadata")
+    images = meta if isinstance(meta, list) else [meta] if isinstance(meta, dict) else []
+    if len(images) == 1 and isinstance(images[0], dict):
+        tags = images[0].get("RepoTags") or images[0].get("RepoDigests") or []
+        if tags and isinstance(tags[0], str):
+            return f"{tags[0]} ({target})"
+    workload = f"{resource.get('Kind') or '?'}/{resource.get('Namespace') or '-'}/{resource.get('Name') or '?'}"
+    return f"{workload} ({target})"
 
 
 def load_report_input(analysis_dir: Path, bundle: Bundle) -> ReportInput:
