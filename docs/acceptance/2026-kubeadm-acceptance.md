@@ -39,3 +39,19 @@ No bundle contents beyond counts are recorded here.
    but map to no APP.4.4/SYS.1.6 requirement (correct per the mapping); the report states this.
 
 Issues 1-3 are follow-ups; none blocks the acceptance criteria above.
+
+## Rerun after fixes (2026-10-01, commit 3454e66)
+
+| Check | Result |
+|---|---|
+| kubescape / trivy | ok (4.0.15) / ok (0.74.0) — trivy completes with `--timeout 25m` |
+| Findings | 18645 (236 critical); 17259 are trivy CVE/GHSA findings |
+| `WEBHOOK_SECRET_NAME` false HIGH | gone |
+| Report length per language | 1248 lines (CVEs summarized per scan target) |
+| Real Secret values (98) in bundle, analysis or report | 0 |
+| trivy payload fields (ImageConfig, CauseMetadata, Match) in bundle | 0 |
+| Analyze runtime on a 175 MB trivy bundle | 3 s |
+
+Issues 1-3 above are resolved. New observation: the sanitized trivy output is 175 MB for this
+three-node cluster, which makes bundles heavy to hand over; consider compressing bundles or
+dropping per-package vulnerability detail the analyzer does not use.
