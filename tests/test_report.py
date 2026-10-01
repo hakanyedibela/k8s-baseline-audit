@@ -183,6 +183,7 @@ def test_hostile_bundle_values_do_not_break_structure(report_input, tmp_path):
     f0 = report_input.findings[0]
     hostile_f = f0.model_copy(update={
         "title": Localized(de=HOSTILE, en=HOSTILE),
+        "remediation": Localized(de=HOSTILE, en=HOSTILE),
         "resources": [ResourceRef(kind="Pod", name=HOSTILE, namespace="d|e")],
         "evidence": [Evidence(file=HOSTILE, json_path=HOSTILE)],
     })
@@ -198,6 +199,7 @@ def test_hostile_bundle_values_do_not_break_structure(report_input, tmp_path):
     assert not re.search(r"^## Heading", bad, re.M)
     outside_code = re.sub(r"`[^`\n]*`", "", bad)  # code spans render literally
     assert "<b>" not in outside_code.replace("\\<b\\>", "")
+    assert not re.search(r"^## H", bad, re.M)
     assert "unknown" in bad  # scanner without status
 
 
@@ -224,3 +226,9 @@ def test_priority_order_note(report_input, tmp_path):
     assert "Reihenfolge nach KI-generierter Priorität" in with_n["de"].read_text()
     without = render_reports(report_input, None, tmp_path / "b")["en"].read_text()
     assert "Order follows" not in without
+
+
+def test_narrative_rejects_inline_links(report_input):
+    ids = {f.id for f in report_input.findings}
+    with pytest.raises(NarrativeError, match="link syntax"):
+        validate_narratives(_bad_narrative(report_input, "summary", "see [here](http://x)"), ids)

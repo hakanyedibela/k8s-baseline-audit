@@ -53,7 +53,7 @@ _{{ L.priority_note }}_
 | {{ L.sources }} | {{ f.sources | map(attribute="value") | join(", ") }} |
 | {{ L.evidence }} | {% for e in f.evidence %}{{ e.file | code }} {{ e.json_path | code }}{% if not loop.last %}<br>{% endif %}{% endfor %} |
 
-**{{ L.fix }}:** {{ f.remediation | attr(lang) }}
+**{{ L.fix }}:** {{ f.remediation | attr(lang) | md }}
 {% if narrative and f.id in narrative.fix_notes %}
 
 _{{ L.ai_label }}:_ {{ narrative.fix_notes[f.id] }}

@@ -50,6 +50,8 @@ def _check_texts(lang: str, n: Narrative) -> None:
                 raise NarrativeError(f"{lang}: forbidden word {word!r} in narrative")
         if "<" in text or "![" in text:
             raise NarrativeError(f"{lang}: HTML or image syntax in narrative")
+        if "](" in text:
+            raise NarrativeError(f"{lang}: link syntax in narrative")
         for line in text.splitlines():
             if line.lstrip().startswith(BLOCK_PREFIXES):
                 raise NarrativeError(f"{lang}: Markdown block syntax in narrative")
