@@ -1,0 +1,41 @@
+name: ci
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pdm-project/setup-pdm@v4
+        with:
+          python-version: ${{ matrix.python }}
+      - run: sudo apt-get update && sudo apt-get install -y jq shellcheck
+      - run: pdm install
+      - run: pdm run ruff check .
+      - run: shellcheck -s sh scripts/export-bundle.sh scripts/install-skill.sh
+      - run: pdm run pytest -v
+
+  integration:
+    runs-on: ubuntu-latest
+    needs: unit
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pdm-project/setup-pdm@v4
+        with:
+          python-version: "3.12"
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: kba-ci
+      - run: kubectl --context kind-kba-ci apply -f examples/kind-demo/insecure.yaml
+      - run: kubectl --context kind-kba-ci -n audit-demo wait --for=condition=Ready pod/hardened --timeout=180s
+      - run: pdm install
+      - run: K8S_BASELINE_AUDIT_IT_CONTEXT=kind-kba-ci pdm run pytest -m integration -v
