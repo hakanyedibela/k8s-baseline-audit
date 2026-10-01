@@ -1,6 +1,7 @@
 import json
 import os
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -40,11 +41,16 @@ SNAPSHOT_KINDS = (
 
 
 def _snapshot():
-    out = subprocess.run(
-        ["kubectl", "--context", CONTEXT, "get", SNAPSHOT_KINDS, "-A", "-o", "name"],
-        capture_output=True, text=True, check=True,
-    ).stdout
-    return sorted(out.splitlines())
+    cmd = ["kubectl", "--context", CONTEXT, "get", SNAPSHOT_KINDS, "-A", "-o", "name"]
+    stderr = ""
+    for attempt in range(3):
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode == 0:
+            return sorted(result.stdout.splitlines())
+        stderr = result.stderr
+        if attempt < 2:
+            time.sleep(2)
+    raise RuntimeError(f"snapshot failed after 3 attempts: {stderr}")
 
 
 @pytest.fixture(scope="module")
@@ -62,7 +68,8 @@ def analysis(tmp_path_factory):
     bundle = Path(collected.stdout.strip().splitlines()[-1])
     analyzed = runner.invoke(cli.app, ["analyze", str(bundle), "--out", str(work / "analysis")])
     assert analyzed.exit_code in (0, 1), analyzed.stderr
-    return before, after, bundle, json.loads((work / "analysis" / "findings.json").read_text())
+    doc = json.loads((work / "analysis" / "findings.json").read_text())
+    return before, after, bundle, work, doc
 
 
 def _checks_for(doc, kind, namespace, name):
@@ -75,19 +82,24 @@ def _checks_for(doc, kind, namespace, name):
     }
 
 
-def test_collection_did_not_change_the_cluster(analysis):
-    before, after, _, _ = analysis
+def test_collection_left_resource_names_unchanged(analysis):
+    """Compares resource names only (defense in depth).
+
+    The real read-only guarantee is the runner's verb allowlist. Resources that are
+    created then deleted, or patched in place, are not detected here.
+    """
+    before, after, _, _, _ = analysis
     assert before == after
 
 
 def test_demo_pods_have_exactly_the_expected_findings(analysis):
-    _, _, _, doc = analysis
+    _, _, _, _, doc = analysis
     assert _checks_for(doc, "Pod", "audit-demo", "insecure") == EXPECTED_INSECURE
     assert _checks_for(doc, "Pod", "audit-demo", "hardened") == EXPECTED_HARDENED
 
 
 def test_cluster_scoped_demo_findings(analysis):
-    _, _, _, doc = analysis
+    _, _, _, _, doc = analysis
     role = _checks_for(doc, "ClusterRole", None, "audit-demo-wildcard")
     assert role == {"identity.wildcard_role"}
     binding = _checks_for(doc, "ClusterRoleBinding", None, "audit-demo-anon")
@@ -95,10 +107,10 @@ def test_cluster_scoped_demo_findings(analysis):
     assert _checks_for(doc, "Namespace", None, "audit-demo") == EXPECTED_NAMESPACE
 
 
-def test_demo_secret_not_in_bundle(analysis):
-    _, _, bundle, _ = analysis
-    for path in bundle.rglob("*"):
+def test_demo_secret_not_in_bundle_or_analysis(analysis):
+    _, _, _, work, _ = analysis
+    for path in work.rglob("*"):
         if path.is_file():
-            text = path.read_text()
-            assert "hunter2-demo" not in text
-            assert "demo-only-not-a-real-secret" not in text
+            data = path.read_bytes()
+            assert b"hunter2-demo" not in data
+            assert b"demo-only-not-a-real-secret" not in data
