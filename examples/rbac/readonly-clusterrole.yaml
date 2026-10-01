@@ -1,0 +1,39 @@
+# Read-only identity for k8s-baseline-audit collect and scripts/export-bundle.sh.
+#
+# Grants get/list/watch on exactly the kinds the collector reads. Nothing here can
+# change the cluster. Bind it to a dedicated ServiceAccount or user, e.g.:
+#   kubectl create clusterrolebinding k8s-baseline-audit --clusterrole=k8s-baseline-audit-readonly \
+#     --user=<AUDITOR>
+#
+# kubescape and trivy, if you let collect run them, read more kinds (deployments,
+# daemonsets, configmaps, ...). With only this role they see less and report less;
+# the built-in checks are unaffected.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: k8s-baseline-audit-readonly
+rules:
+  - apiGroups: [""]
+    resources: [namespaces, nodes, pods, serviceaccounts]
+    verbs: [get, list, watch]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [roles, clusterroles, rolebindings, clusterrolebindings]
+    verbs: [get, list, watch]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [get, list, watch]
+---
+# OPTIONAL: secret metadata, needed only by the check identity.long_lived_token_secret.
+# Trade-off: the Kubernetes API has no "list names only" permission.
+# `list secrets` returns the full objects, values included, to the client. The tool
+# asks kubectl for names, types and data keys only and never writes values, but the
+# values do travel to the machine running kubectl. Without this rule that check is
+# reported as "not checked" with the reason.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: k8s-baseline-audit-secret-metadata
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [list]

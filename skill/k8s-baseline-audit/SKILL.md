@@ -33,6 +33,7 @@ pipx install git+https://github.com/hakanyedibela/k8s-baseline-audit
 Ask the user which applies:
 
 - **Live, read-only:** the user has a kubeconfig for the cluster. Show the current context with `kubectl config current-context` and get explicit confirmation that it is the cluster to audit.
+  Tell the user what "read-only" covers: the tool itself issues only the kubectl verbs `get`, `version`, `api-resources`, `auth can-i`, `config current-context` and `config view`. kubescape and trivy, if enabled, read the cluster through the same kubeconfig with `kubescape scan --keep-local --host-scan=false` and `trivy k8s --disable-node-collector --disable-telemetry`; the tool cannot enforce what they do. Recommend a read-only identity, for example the ClusterRole in `examples/rbac/readonly-clusterrole.yaml` of the k8s-baseline-audit repository. Its optional secrets rule lets secret values travel to the client (the API has no names-only permission); the tool never writes them.
 - **Offline bundle:** the client ran the `export-bundle.sh` script from the k8s-baseline-audit repository and handed over a bundle directory. Ask for its path and skip Step 2.
 
 Also ask whether the user has a list of approved image registries, and whether kube-bench result files exist (one JSON file per node).

@@ -26,9 +26,15 @@ Access modes:
 
 | Mode | Description |
 |---|---|
-| Read-only live | You run the collector with a read-only kubeconfig. It uses only `get`, `version`, `api-resources`, `auth can-i` and `config` read verbs. Anything else raises before execution. |
+| Read-only live | You run the collector with a read-only kubeconfig. The tool itself issues only the kubectl verbs `get`, `version`, `api-resources`, `auth can-i`, `config current-context` and `config view`; anything else raises before execution. kubescape and trivy, if enabled, read the cluster through your kubeconfig with `kubescape scan --keep-local --host-scan=false` and `trivy k8s --disable-node-collector --disable-telemetry`. The tool cannot enforce what those scanners do, so use a read-only identity (see below). |
 | Offline bundle | The client runs the export script and hands over a bundle. The analyzer never touches the cluster. |
 | Node scan (optional) | kube-bench results that you ran yourself are imported. The tool never launches kube-bench. |
+
+### Read-only identity
+
+The verb allow-list protects against the tool, not against the credentials you give it. Run `collect` (and the export script) with an identity that cannot write. [`examples/rbac/readonly-clusterrole.yaml`](examples/rbac/readonly-clusterrole.yaml) grants `get`, `list` and `watch` on exactly the kinds the collector reads, and nothing else.
+
+Secrets are an optional second role in that file. The Kubernetes API has no permission that lists secret names without values: `list secrets` returns the full objects, values included, to the client. The tool requests only names, types and data keys and never writes values, but the values still travel to the machine running kubectl. Without that role the long-lived token check is reported as "not checked". kubescape and trivy read more kinds than the collector; with the minimal role they report less.
 
 ## What it does not check
 
@@ -46,6 +52,8 @@ pipx install git+https://github.com/hakanyedibela/k8s-baseline-audit
 
 Requirements: Python 3.11+ and `kubectl`. Optional: `kubescape` and `trivy` (run by the collector unless you pass `--no-scanners`), and `jq` (only for the client export script).
 
+`pipx` installs the CLI only. `scripts/export-bundle.sh` and `scripts/install-skill.sh` are not part of the package; run them from a checkout of this repository (`git clone https://github.com/hakanyedibela/k8s-baseline-audit`).
+
 ## Quick start
 
 ```sh
@@ -59,7 +67,7 @@ k8s-baseline-audit report ./audit/analysis --bundle <BUNDLE> --out ./audit/repor
 
 ## Offline bundles
 
-A client who does not give you cluster access runs `scripts/export-bundle.sh` on their own admin host:
+A client who does not give you cluster access runs `scripts/export-bundle.sh` from a checkout of this repository on their own admin host:
 
 ```sh
 sh scripts/export-bundle.sh -o ./out [-c CONTEXT] [-k kubescape.json] [-t trivy.json] [-b NODE=kube-bench.json]
@@ -69,7 +77,7 @@ It needs `kubectl`, `jq` 1.6+ and `sha256sum` or `shasum`, and writes the same b
 
 ## Redaction
 
-Secret values, literal `env` values, pod annotations (including `kubectl.kubernetes.io/last-applied-configuration`) and pod status never reach disk. Scanner payloads are removed structurally: kubescape `object` bodies; trivy `CauseMetadata` snippets, `Match` and `Code` (secret matches and code snippets) and image config; kube-bench values.
+Secret values, literal `env` values, pod annotations (including `kubectl.kubernetes.io/last-applied-configuration`) and pod status never reach disk. Scanner payloads are removed structurally: kubescape `object` bodies are reduced to identity fields; trivy `CauseMetadata` snippets and image config are removed, and secret findings keep only `RuleID`, `Category`, `Severity`, `Title`, `StartLine`, `EndLine` and the layer `Digest`/`DiffID`; kube-bench results keep only `test_number`, `test_desc`, `status`, `scored`, `remediation` and `type`. Scanner output without the expected top-level structure is rejected, never stored. kubectl and scanner error messages pass through rules C and D below before they are stored.
 
 Command and argument lists (`command`, `args`, probe commands, lifecycle hooks) are redacted by pattern. Rules: (A) `key=value` where the key contains a secret word such as password, token, secret, api key, credentials, dsn, bearer or private key; (B) a flag with a secret word followed by the next argument; (C) credentials in URLs (`scheme://user:pass@host`); (D) embedded `key=value` inside longer strings.
 
@@ -80,6 +88,12 @@ Known limitations of argument redaction:
 - A value that follows an empty `--api_key=` argument is not masked.
 
 Review the bundle before you hand it on. It still contains client data (names, images, topology).
+
+## Known limitations
+
+- Argument redaction has the gaps listed under "Redaction" above.
+- While `collect` runs kubescape and trivy, their raw JSON output (unsanitized, including kubescape `object` bodies and trivy code snippets) exists in a private temporary directory (mode 0700) and is deleted when the scan ends; only the sanitized version enters the bundle. If the process is killed or the machine loses power during the scan, that directory may remain in the OS temp directory (`$TMPDIR` or `/tmp`). Check for leftover `tmp*` directories after an interrupted run.
+- kubescape and trivy keep their own caches outside the bundle (trivy: its cache directory, for example `~/.cache/trivy` or `~/Library/Caches/trivy`; kubescape: `~/.kubescape`). The tool does not manage them.
 
 ## kube-bench
 
@@ -94,7 +108,7 @@ The export script takes the same input with `-b NODE=FILE`.
 
 ## Use with AI agents
 
-The skill in `skill/k8s-baseline-audit/` drives the whole workflow (collect, analyze, narrative, render) for an AI coding agent. Install it with:
+The skill in `skill/k8s-baseline-audit/` drives the whole workflow (collect, analyze, narrative, render) for an AI coding agent. Install it from a checkout of this repository with:
 
 ```sh
 sh scripts/install-skill.sh claude            # or: cursor copilot codex gemini agents
@@ -121,7 +135,7 @@ Generated from a local throwaway kind cluster with a deliberately insecure pod, 
 - [examples/kind-demo/report.de.md](examples/kind-demo/report.de.md)
 - [examples/kind-demo/report.en.md](examples/kind-demo/report.en.md)
 
-The reports are large because the scanners also flag the default cluster roles and base images.
+Built-in checks get one section per check with a row per finding. Checks reported only by a scanner are summarized in one table, and image vulnerabilities are counted per image; `findings.json` keeps every single finding.
 
 ## Coverage statuses
 
@@ -140,7 +154,7 @@ The word "fulfilled" (German "erfüllt") is never used. An automated tool cannot
 
 The mapping `kompendium-2023` targets IT-Grundschutz-Kompendium Edition 2023. Mappings are stored per framework edition; a Grundschutz++ mapping would be a separate file. Source check of 2026-10-01 (re-check before each release):
 
-- The BSI "Prüfgrundlage für Zertifizierungen nach ISO 27001 auf der Basis von IT-Grundschutz", version 4.8 of 01.02.2026, names the Kompendium Edition 2023 as a mandatory audit basis and sets no transition deadline for it. <https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/Zertifikat/Veroeffentl/Pruefgrundlagen_Kompendium.pdf?__blob=publicationFile&v=16>
+- The BSI "Prüfgrundlage für Zertifizierungen nach ISO 27001 auf der Basis von IT-Grundschutz nach dem IT-Grundschutz-Kompendium", version 4.8 of 01.02.2026, names the Kompendium Edition 2023 as a mandatory audit basis and sets no transition deadline for it. <https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Grundschutz/Zertifikat/Veroeffentl/Pruefgrundlagen_Kompendium.pdf?__blob=publicationFile&v=16>
 - BSI's Grundschutz++ milestone plan (status September 2026) dates certifiability of Grundschutz++ from 2027-01-01 and the end of certifiability under IT-Grundschutz on 2031-11-30. <https://www.bsi.bund.de/DE/Themen/Unternehmen-und-Organisationen/Standards-und-Zertifizierung/Grundschutz-in-der-Informationssicherheit/Grundschutz-Plus-Plus/grundschutz-plus-plus_node.html>
 - The Kompendium page names Edition 2023 as the current edition. <https://www.bsi.bund.de/DE/Themen/Unternehmen-und-Organisationen/Standards-und-Zertifizierung/IT-Grundschutz/IT-Grundschutz-Kompendium/it-grundschutz-kompendium_node.html>
 
