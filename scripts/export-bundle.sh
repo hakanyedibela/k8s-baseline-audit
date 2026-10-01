@@ -144,10 +144,26 @@ def identity:
       .metadata = ($o.metadata as $md | reduce ("name", "namespace") as $k
         ({}; if $md[$k] != null then .[$k] = $md[$k] else . end))
     else . end;
+def ks_control:
+  pick("controlID", "name", "severity", "status")
+  | if (.status | type) == "object" then .status |= pick("status") else . end;
+def ks_result:
+  pick("resourceID", "controls")
+  | if has("controls") then .controls |= (if type == "array" then map(ks_control) else shape end) else . end;
+def ks_resource:
+  pick("resourceID", "object") | if (.object | type) == "object" then .object |= identity else . end;
 def sanitize_kubescape:
   if type == "object" and (.results | type) == "array"
      and ((has("resources") | not) or (.resources | type) == "array")
-  then each_at("resources"; obj | if (.object | type) == "object" then .object |= identity else . end)
+  then
+    . as $d
+    | {results: ($d.results | map(ks_result))}
+    + (if ($d | has("resources")) then {resources: ($d.resources | map(ks_resource))} else {} end)
+    + (if ($d.summaryDetails | type) == "object" and ($d.summaryDetails.controls | type) == "object"
+       then {summaryDetails: {controls: ($d.summaryDetails.controls
+              | with_entries(select(.value | type == "object")
+                  | .value |= pick("name", "severity", "controlID")))}}
+       else {} end)
   else shape end;
 def image:
   if type == "array" then map(image)
@@ -158,19 +174,27 @@ def secret:
   . as $s
   | pick("RuleID", "Category", "Severity", "Title", "StartLine", "EndLine")
   | if ($s.Layer | type) == "object" then .Layer = ($s.Layer | pick("Digest", "DiffID")) else . end;
+def trivy_result:
+  pick("Target", "Class", "Type", "Metadata", "Misconfigurations", "Vulnerabilities", "Secrets")
+  | at("Metadata"; image)
+  | each_at("Misconfigurations"; pick("ID", "AVDID", "Title", "Severity", "Status", "Resolution"))
+  | each_at("Vulnerabilities"; pick("VulnerabilityID", "PkgName", "InstalledVersion", "FixedVersion", "Severity"))
+  | each_at("Secrets"; secret);
+def trivy_resource:
+  pick("Namespace", "Kind", "Name", "Metadata", "Results") | at("Metadata"; image) | each_at("Results"; trivy_result);
 def sanitize_trivy:
   if type == "object" and (.Resources | type) == "array" then
-    each_at("Resources"; obj
-      | at("Metadata"; image)
-      | each_at("Results"; obj
-          | at("Metadata"; image)
-          | each_at("Misconfigurations"; obj | del(.CauseMetadata))
-          | each_at("Secrets"; secret)))
+    . as $d
+    | {Resources: ($d.Resources | map(trivy_resource))}
+    + (if ($d | has("ClusterName")) then {ClusterName: $d.ClusterName} else {} end)
   else shape end;
+def bench_test:
+  pick("section", "desc", "results")
+  | each_at("results"; pick("test_number", "test_desc", "status", "scored", "remediation", "type"));
+def bench_control:
+  pick("id", "version", "text", "node_type", "tests") | each_at("tests"; bench_test);
 def sanitize_kube_bench:
-  if type == "object" and (.Controls | type) == "array" then
-    each_at("Controls"; obj | each_at("tests"; obj | each_at("results";
-      pick("test_number", "test_desc", "status", "scored", "remediation", "type"))))
+  if type == "object" and (.Controls | type) == "array" then {Controls: (.Controls | map(bench_control))}
   else shape end;
 '
 

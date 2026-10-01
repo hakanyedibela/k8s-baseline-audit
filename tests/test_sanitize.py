@@ -235,3 +235,203 @@ def test_kube_bench_results_keep_only_allowlisted_fields():
         "type": "",
     }
     assert "leak-123" not in json.dumps(out)
+
+
+def test_trivy_keeps_only_fields_the_parser_reads():
+    doc = {
+        "ClusterName": "c",
+        "Misconfigurations": [{"CauseMetadata": {"Code": "PASSWORD=LEAK"}}],
+        "Resources": [
+            {
+                "Namespace": "ns",
+                "Kind": "Pod",
+                "Name": "p",
+                "Extra": "LEAK",
+                "Metadata": [{"RepoTags": ["a:1"], "ImageConfig": {"config": {"Env": ["K=LEAK"]}}}],
+                "Results": [
+                    {
+                        "Target": "a:1 (debian)",
+                        "Class": "os-pkgs",
+                        "Type": "debian",
+                        "Junk": "LEAK",
+                        "Vulnerabilities": [
+                            {
+                                "VulnerabilityID": "CVE-1",
+                                "PkgName": "openssl",
+                                "InstalledVersion": "3",
+                                "FixedVersion": "4",
+                                "Severity": "HIGH",
+                                "Description": "long text",
+                                "References": ["u"],
+                                "CVSS": {"nvd": {}},
+                                "PkgPath": "/x",
+                                "Layer": {"CreatedBy": "LEAK"},
+                            }
+                        ],
+                        "Misconfigurations": [
+                            {
+                                "ID": "KSV-0017",
+                                "AVDID": "AVD-KSV-0017",
+                                "Title": "t",
+                                "Severity": "HIGH",
+                                "Status": "FAIL",
+                                "Resolution": "r",
+                                "Message": "LEAK",
+                                "Description": "d",
+                                "References": ["u"],
+                                "Query": "q",
+                            }
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+    assert sanitize_trivy(doc) == {
+        "ClusterName": "c",
+        "Resources": [
+            {
+                "Namespace": "ns",
+                "Kind": "Pod",
+                "Name": "p",
+                "Metadata": [{"RepoTags": ["a:1"]}],
+                "Results": [
+                    {
+                        "Target": "a:1 (debian)",
+                        "Class": "os-pkgs",
+                        "Type": "debian",
+                        "Vulnerabilities": [
+                            {
+                                "VulnerabilityID": "CVE-1",
+                                "PkgName": "openssl",
+                                "InstalledVersion": "3",
+                                "FixedVersion": "4",
+                                "Severity": "HIGH",
+                            }
+                        ],
+                        "Misconfigurations": [
+                            {
+                                "ID": "KSV-0017",
+                                "AVDID": "AVD-KSV-0017",
+                                "Title": "t",
+                                "Severity": "HIGH",
+                                "Status": "FAIL",
+                                "Resolution": "r",
+                            }
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+
+
+def test_kubescape_keeps_only_fields_the_parser_reads():
+    doc = {
+        "clusterAPIServerInfo": {"x": "LEAK"},
+        "summaryDetails": {
+            "frameworks": [{"name": "nsa"}],
+            "controls": {
+                "C-0057": {
+                    "name": "Privileged",
+                    "severity": "High",
+                    "controlID": "C-0057",
+                    "description": "long",
+                }
+            },
+        },
+        "resources": [
+            {
+                "resourceID": "r",
+                "source": {"path": "LEAK"},
+                "object": {"kind": "Pod", "metadata": {"name": "p"}, "spec": "LEAK"},
+            }
+        ],
+        "results": [
+            {
+                "resourceID": "r",
+                "prioritySummary": {},
+                "controls": [
+                    {
+                        "controlID": "C-0057",
+                        "name": "Privileged",
+                        "severity": "High",
+                        "status": {"status": "failed", "info": "LEAK"},
+                        "rules": [{"paths": [{"failedPath": "LEAK"}]}],
+                    }
+                ],
+            }
+        ],
+    }
+    assert sanitize_kubescape(doc) == {
+        "summaryDetails": {
+            "controls": {
+                "C-0057": {"name": "Privileged", "severity": "High", "controlID": "C-0057"}
+            }
+        },
+        "resources": [{"resourceID": "r", "object": {"kind": "Pod", "metadata": {"name": "p"}}}],
+        "results": [
+            {
+                "resourceID": "r",
+                "controls": [
+                    {
+                        "controlID": "C-0057",
+                        "name": "Privileged",
+                        "severity": "High",
+                        "status": {"status": "failed"},
+                    }
+                ],
+            }
+        ],
+    }
+
+
+def test_kube_bench_keeps_only_fields_the_parser_reads():
+    from k8s_baseline_audit.collect.sanitize import sanitize_kube_bench
+
+    doc = {
+        "Totals": {"total_pass": 1},
+        "Controls": [
+            {
+                "id": "4",
+                "version": "cis-1.12",
+                "text": "Node",
+                "node_type": "node",
+                "detected_version": "LEAK",
+                "total_fail": 1,
+                "tests": [
+                    {
+                        "section": "4.2",
+                        "desc": "Kubelet",
+                        "fail": 1,
+                        "info": "LEAK",
+                        "results": [
+                            {
+                                "test_number": "4.2.1",
+                                "test_desc": "d",
+                                "status": "FAIL",
+                                "actual_value": "LEAK",
+                            }
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+    assert sanitize_kube_bench(doc) == {
+        "Controls": [
+            {
+                "id": "4",
+                "version": "cis-1.12",
+                "text": "Node",
+                "node_type": "node",
+                "tests": [
+                    {
+                        "section": "4.2",
+                        "desc": "Kubelet",
+                        "results": [{"test_number": "4.2.1", "test_desc": "d", "status": "FAIL"}],
+                    }
+                ],
+            }
+        ],
+    }

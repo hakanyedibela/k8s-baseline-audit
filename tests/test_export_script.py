@@ -168,11 +168,13 @@ RULE_ARGS = [
     f"--apı-key={SECRET}",
     f"--prıvate-key={SECRET}",
     f"--credentıal={SECRET}",
-    "--APİKEY", SECRET,
+    "--APİKEY",
+    SECRET,
     f"ı://u:{SECRET}@h",
     f"PASSWORD=/tmp; mysql --password={SECRET}",
     f"TOKEN_FILE=/var/run/x && app --token={SECRET}",
-    "--password", f"/etc/a {SECRET}",
+    "--password",
+    f"/etc/a {SECRET}",
     "--token-auth-file=/etc/k/t.csv",
     "--audit-log-path=/var/log/x",
     "--token",  # B at the end, no next element
@@ -383,6 +385,48 @@ KB = {
         {"id": "2", "tests": []},
     ],
     "Totals": {"total_fail": 1},
+}
+
+# Allowlist parity: junk at every level, top-level and nested, must vanish identically.
+KS = {
+    **KS,
+    "clusterAPIServerInfo": {"x": SECRET},
+    "summaryDetails": {
+        "frameworks": [{"name": SECRET}],
+        "controls": {"C-0057": {"name": "Privileged", "severity": "High", "description": SECRET}},
+    },
+}
+TV = {**TV, "Misconfigurations": [{"CauseMetadata": {"Code": SECRET}}], "SchemaVersion": 2}
+TV["Resources"] = [{**r, "Extra": SECRET} for r in TV["Resources"]]
+TV["Resources"][0]["Results"] = [
+    {
+        **res,
+        "Junk": SECRET,
+        "Vulnerabilities": [
+            {
+                "VulnerabilityID": "CVE-1",
+                "PkgName": "p",
+                "InstalledVersion": "1",
+                "Severity": "HIGH",
+                "Description": SECRET,
+                "References": [SECRET],
+            }
+        ],
+    }
+    for res in TV["Resources"][0].get("Results", [])
+]
+KB = {
+    **KB,
+    "Totals": {"note": SECRET},
+    "Controls": [
+        {
+            **c,
+            "detected_version": SECRET,
+            "text": "Node",
+            "tests": [{**t, "info": SECRET} for t in c.get("tests", [])],
+        }
+        for c in KB["Controls"]
+    ],
 }
 
 
