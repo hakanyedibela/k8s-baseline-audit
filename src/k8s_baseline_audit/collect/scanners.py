@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..bundle import dump_json
+from .redact import redact_text
 from .sanitize import sanitize_kube_bench, sanitize_kubescape, sanitize_trivy
 
 SCAN_TIMEOUT = 1800
@@ -54,6 +55,11 @@ def trivy_argv(out: Path, context: str | None) -> list[str]:
     return argv + ([context] if context else [])
 
 
+def _error(text: str) -> str:
+    """Free-text scanner errors are redacted (rules C and D) before they reach the manifest."""
+    return redact_text(text.strip())[-500:]
+
+
 def _slug(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "-", text).strip("-") or "node"
 
@@ -85,11 +91,11 @@ def run_scanners(
             if code != 0:
                 out.status[name] = {
                     "status": "failed",
-                    "error": (err.strip() or f"exit {code}")[-500:],
+                    "error": _error(err.strip() or f"exit {code}"),
                 }
                 continue
         except Exception as exc:
-            out.status[name] = {"status": "failed", "error": str(exc)[-500:]}
+            out.status[name] = {"status": "failed", "error": _error(str(exc))}
             continue
         version = (version_out.strip().splitlines() or ["unknown"])[0]
         target = workdir / f"{name}.json"
@@ -101,12 +107,12 @@ def run_scanners(
             out.status[name] = {
                 "status": "failed",
                 "version": version,
-                "error": str(exc)[-500:],
+                "error": _error(str(exc)),
             }
             continue
         out.commands.append({"argv": argv, "exit_code": code})
         if code != 0 or not target.is_file():
-            error_msg = (err.strip() or f"exit {code}")[-500:]
+            error_msg = _error(err.strip() or f"exit {code}")
             out.status[name] = {"status": "failed", "version": version, "error": error_msg}
             continue
         try:
@@ -139,6 +145,8 @@ def run_scanners(
     nodes = []
     for node, path in plan.kube_bench_results:
         slug = _slug(node)
+        if slug in nodes:
+            raise ValueError(f"duplicate kube-bench node name: {slug}")
         try:
             text = Path(path).read_text()
         except (FileNotFoundError, IsADirectoryError, OSError, UnicodeDecodeError):
@@ -152,7 +160,7 @@ def run_scanners(
         try:
             sanitized = sanitize_kube_bench(doc)
         except Exception:
-            raise ValueError(f"kube-bench result is not valid JSON: {path}") from None
+            raise ValueError(f"kube-bench result has unexpected shape: {path}") from None
         out.files[f"scanners/kube-bench-{slug}.json"] = dump_json(sanitized)
         nodes.append(slug)
     if nodes:

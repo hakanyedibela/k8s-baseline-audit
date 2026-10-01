@@ -213,3 +213,22 @@ def test_extra_files_must_be_in_scanners_dir(tmp_path):
                 extra_files={"results/bad.json": b"{}"},
             ),
         )
+
+
+def test_kubectl_stderr_is_redacted_in_errors(tmp_path):
+    class Leaky(FakeKubectl):
+        def __call__(self, argv):
+            result = super().__call__(argv)
+            if result.exit_code != 0:
+                stderr = "Error: --password=LEAK1 dial postgres://u:LEAK2@h:5432 refused"
+                return result.__class__(result.argv, result.exit_code, result.stdout, stderr)
+            return result
+
+    fake = Leaky(get={"pods": (1, "")}, can_i_failures={"nodes": (2, "", "x")})
+    b = load_bundle(_collect(tmp_path, fake))
+    reasons = {e["resource"]: e["reason"] for e in b.errors}
+    assert "LEAK" not in json.dumps(b.errors)
+    assert reasons["pods"] == (
+        "kubectl exit 1: Error: --password=<redacted> dial postgres://u:<redacted>@h:5432 refused"
+    )
+    assert reasons["nodes"].startswith("preflight failed: kubectl exit 2: Error: --password=<red")

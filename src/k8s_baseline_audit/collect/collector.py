@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from ..bundle import dump_json, write_bundle
-from .redact import SECRET_TEMPLATE, parse_secret_rows, redact_pod_list
+from .redact import SECRET_TEMPLATE, parse_secret_rows, redact_pod_list, redact_text
 from .runner import CommandResult, KubectlRunner
 
 JSON_KINDS = (
@@ -52,7 +52,7 @@ def _slug(text: str) -> str:
 
 
 def _reason(result: CommandResult) -> str:
-    detail = result.stderr.strip()[-500:]
+    detail = redact_text(result.stderr.strip())[-500:]
     if detail:
         return f"kubectl exit {result.exit_code}: {detail}"
     return f"kubectl exit {result.exit_code}"

@@ -1,7 +1,10 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from k8s_baseline_audit.collect.sanitize import (
+    SanitizeShapeError,
     sanitize_kube_bench,
     sanitize_kubescape,
     sanitize_trivy,
@@ -152,3 +155,83 @@ def test_captured_fixtures_do_not_leak_demo_secret_after_sanitizing():
     assert "hunter2-demo" not in json.dumps(ks)
     assert "hunter2-demo" not in json.dumps(tv)
     assert "hunter2-demo" not in json.dumps(kb)
+
+
+# --- I3: fail closed on unexpected shapes, allowlist free-form records -----------------------
+
+
+@pytest.mark.parametrize(
+    ("fn", "doc"),
+    [
+        (sanitize_trivy, []),
+        (sanitize_trivy, {}),
+        (sanitize_trivy, {"Resources": None}),
+        (sanitize_trivy, {"Resources": {"a": 1}}),
+        (sanitize_kubescape, "text"),
+        (sanitize_kubescape, {"resources": []}),
+        (sanitize_kubescape, {"results": {}}),
+        (sanitize_kubescape, {"results": [], "resources": None}),
+        (sanitize_kubescape, {"results": [], "resources": {}}),
+        (sanitize_kube_bench, [1]),
+        (sanitize_kube_bench, {}),
+        (sanitize_kube_bench, {"Controls": None}),
+    ],
+)
+def test_unexpected_top_level_shape_is_rejected(fn, doc):
+    with pytest.raises(SanitizeShapeError):
+        fn(doc)
+
+
+def test_trivy_secrets_keep_only_allowlisted_fields():
+    secret = {
+        "RuleID": "aws-access-key-id",
+        "Category": "AWS",
+        "Severity": "CRITICAL",
+        "Title": "AWS Access Key ID",
+        "StartLine": 3,
+        "EndLine": 3,
+        "Layer": {"Digest": "sha256:aa", "DiffID": "sha256:bb", "CreatedBy": "ENV K=leak-123"},
+        "Match": "AKIA leak-123",
+        "Code": {"Lines": ["leak-123"]},
+        "Offset": 42,
+        "Unknown": "leak-123",
+    }
+    odd = {"RuleID": "x", "Layer": "leak-123"}
+    doc = {"Resources": [{"Results": [{"Secrets": [secret, odd]}]}]}
+    out = sanitize_trivy(doc)
+    first, second = out["Resources"][0]["Results"][0]["Secrets"]
+    assert first == {
+        "RuleID": "aws-access-key-id",
+        "Category": "AWS",
+        "Severity": "CRITICAL",
+        "Title": "AWS Access Key ID",
+        "StartLine": 3,
+        "EndLine": 3,
+        "Layer": {"Digest": "sha256:aa", "DiffID": "sha256:bb"},
+    }
+    assert second == {"RuleID": "x"}
+    assert "leak-123" not in json.dumps(out)
+
+
+def test_kube_bench_results_keep_only_allowlisted_fields():
+    result = {
+        "test_number": "1.1.1",
+        "test_desc": "Ensure x",
+        "status": "FAIL",
+        "scored": True,
+        "remediation": "chmod 600",
+        "type": "",
+        "reason": "token=leak-123",
+        "audit": "cat /etc/x leak-123",
+        "unknown": "leak-123",
+    }
+    out = sanitize_kube_bench({"Controls": [{"tests": [{"results": [result]}]}]})
+    assert out["Controls"][0]["tests"][0]["results"][0] == {
+        "test_number": "1.1.1",
+        "test_desc": "Ensure x",
+        "status": "FAIL",
+        "scored": True,
+        "remediation": "chmod 600",
+        "type": "",
+    }
+    assert "leak-123" not in json.dumps(out)

@@ -56,6 +56,12 @@ def safe: (ascii_downcase | . == "true" or . == "false") or test("\\A/[^" + sp +
 def unquote:
   if (startswith("\"") and endswith("\"")) or (startswith("\u0027") and endswith("\u0027"))
   then .[1:-1] else . end;
+# redact.py: redact_text (rules C and D on free text).
+def redact_text:
+  gsub(rule_c; "\(.pre)<redacted>@"; "i")
+  | gsub(rule_d; (.val | unquote) as $u
+      | if $u != "" and ($u | safe | not) then "\(.key)=<redacted>"
+        else "\(.key)=\(.val)" end; "i");
 def redact_list:
   . as $a
   | reduce range(0; length) as $i ({out: [], skip: false};
@@ -68,11 +74,7 @@ def redact_list:
           elif ($e | test(rule_b; "i"))
                and ($a[$i + 1] | type == "string" and . != "" and ((startswith("-") or safe) | not))
           then .out += [$e, "<redacted>"] | .skip = true
-          else .out += [$e
-              | gsub(rule_c; "\(.pre)<redacted>@"; "i")
-              | gsub(rule_d; (.val | unquote) as $u
-                  | if $u != "" and ($u | safe | not) then "\(.key)=<redacted>"
-                    else "\(.key)=\(.val)" end; "i")]
+          else .out += [$e | redact_text]
           end
       end)
   | .out;
@@ -131,7 +133,9 @@ def secret_rows:
          keys: ($f[3] | split(",") | map(select(. != "")) | sort)})
   | {items: .};
 
-# sanitize.py
+# sanitize.py. Top-level shapes the parsers need are required (fail closed), and
+# free-form records are reduced to allowlisted fields.
+def pick(keys): obj | with_entries(select(.key as $k | any(keys; . == $k)));
 def identity:
   . as $o
   | reduce ("apiVersion", "apiGroup", "kind", "name", "namespace") as $k
@@ -141,22 +145,33 @@ def identity:
         ({}; if $md[$k] != null then .[$k] = $md[$k] else . end))
     else . end;
 def sanitize_kubescape:
-  obj | each_at("resources"; obj | if (.object | type) == "object" then .object |= identity else . end);
+  if type == "object" and (.results | type) == "array"
+     and ((has("resources") | not) or (.resources | type) == "array")
+  then each_at("resources"; obj | if (.object | type) == "object" then .object |= identity else . end)
+  else shape end;
 def image:
   if type == "array" then map(image)
   elif type == "object" then
     with_entries(select(.key == "RepoTags" or .key == "RepoDigests" or .key == "ImageID" or .key == "OS"))
   else . end;
+def secret:
+  . as $s
+  | pick("RuleID", "Category", "Severity", "Title", "StartLine", "EndLine")
+  | if ($s.Layer | type) == "object" then .Layer = ($s.Layer | pick("Digest", "DiffID")) else . end;
 def sanitize_trivy:
-  obj | each_at("Resources"; obj
-    | at("Metadata"; image)
-    | each_at("Results"; obj
-        | at("Metadata"; image)
-        | each_at("Misconfigurations"; obj | del(.CauseMetadata))
-        | each_at("Secrets"; obj | del(.Match, .Code))));
+  if type == "object" and (.Resources | type) == "array" then
+    each_at("Resources"; obj
+      | at("Metadata"; image)
+      | each_at("Results"; obj
+          | at("Metadata"; image)
+          | each_at("Misconfigurations"; obj | del(.CauseMetadata))
+          | each_at("Secrets"; secret)))
+  else shape end;
 def sanitize_kube_bench:
-  obj | each_at("Controls"; obj | each_at("tests"; obj | each_at("results"; obj
-    | del(.actual_value, .AuditConfig, .AuditEnv, .expected_result))));
+  if type == "object" and (.Controls | type) == "array" then
+    each_at("Controls"; obj | each_at("tests"; obj | each_at("results";
+      pick("test_number", "test_desc", "status", "scored", "remediation", "type"))))
+  else shape end;
 '
 
 # --- helpers ----------------------------------------------------------------------------
@@ -271,10 +286,10 @@ capture() {
   TEXT=$(jq -r . "$TMP/out")
 }
 
-# Mirrors collector._reason: stderr only, never stdout.
+# Mirrors collector._reason: stderr only, never stdout, redacted (rules C and D).
 reason() {
   jq -R -s -r --arg rc "$KRC" "$JQ_LIB"'
-    strip | .[-500:] | if . == "" then "kubectl exit \($rc)" else "kubectl exit \($rc): \(.)" end' \
+    strip | redact_text | .[-500:] | if . == "" then "kubectl exit \($rc)" else "kubectl exit \($rc): \(.)" end' \
     < "$TMP/stderr"
 }
 

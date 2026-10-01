@@ -45,7 +45,8 @@ with open(os.environ["FAKE_KUBECTL_LOG"], "a") as log:
     log.write(json.dumps(args) + "\\n")
 def kinds(name):
     return set(filter(None, os.environ.get(name, "").split(",")))
-LONG_ERR = "  \\n" + "x" * 300 + "\\n" + "Error from server: " + "y" * 300 + " \\n\\n"
+LONG_ERR = os.environ.get("FAKE_STDERR") or (
+    "  \\n" + "x" * 300 + "\\n" + "Error from server: " + "y" * 300 + " \\n\\n")
 verb = args[0]
 if verb == "config":
     sys.stdout.write("kind-test\\n" if args[1] == "current-context" else "https://127.0.0.1:6443")
@@ -64,7 +65,8 @@ if verb == "auth":
         sys.exit(1)
     if kind in kinds("FAKE_CANI_FAIL"):
         sys.stdout.write("stdout-must-not-leak")
-        sys.stderr.write("error: You must be logged in to the server (Unauthorized)\\n")
+        sys.stderr.write(os.environ.get("FAKE_STDERR") or
+                         "error: You must be logged in to the server (Unauthorized)\\n")
         sys.exit(2)
     print("yes")
     sys.exit(0)
@@ -326,7 +328,21 @@ TV = {
                 },
                 {
                     "Secrets": [
-                        {"RuleID": "x", "Match": SECRET, "Code": {"Lines": [SECRET]}, "Title": "t"}
+                        {"RuleID": "x", "Match": SECRET, "Code": {"Lines": [SECRET]}, "Title": "t"},
+                        {
+                            "RuleID": "aws",
+                            "Category": "AWS",
+                            "Severity": "CRITICAL",
+                            "StartLine": 1,
+                            "EndLine": 2,
+                            "Offset": SECRET,
+                            "Layer": {
+                                "Digest": "sha256:a",
+                                "DiffID": "sha256:b",
+                                "CreatedBy": SECRET,
+                            },
+                        },
+                        {"RuleID": "odd-layer", "Layer": SECRET},
                     ]
                 },
                 {"Vulnerabilities": [{"VulnerabilityID": "CVE-1"}], "Misconfigurations": None},
@@ -352,6 +368,12 @@ KB = {
                             "AuditEnv": SECRET,
                             "expected_result": SECRET,
                             "remediation": "chmod 600",
+                            "reason": SECRET,
+                            "audit": SECRET,
+                            "unknown_future_key": SECRET,
+                            "test_desc": "Ensure x",
+                            "scored": True,
+                            "type": "",
                         }
                     ],
                 },
@@ -671,6 +693,14 @@ def test_real_scanner_fixtures_match_python(env, name):
         ("-t", '{"Resources": [{"Results": [{"Secrets": [[1]]}]}]}'),
         ("-b", '"text"'),
         ("-b", '{"Controls": [{"tests": [{"results": ["x"]}]}]}'),
+        ("-b", "{}"),
+        ("-b", '{"Controls": null}'),
+        ("-k", '{"resources": []}'),
+        ("-k", '{"results": [], "resources": null}'),
+        ("-k", '{"results": {}}'),
+        ("-t", '{"ClusterName": "x"}'),
+        ("-t", '{"Resources": null}'),
+        ("-t", '{"Resources": [{"Results": [{"Secrets": ["x"]}]}]}'),
     ],
 )
 def test_bad_scanner_input_exits_2_before_any_kubectl_call(env, flag, content):
@@ -690,3 +720,64 @@ def test_duplicate_kube_bench_node_exits_2(env):
     proc = run(tmp_path, environ, "-b", f"cp 1={kb}", "-b", f"cp-1={kb}")
     assert proc.returncode == 2
     assert not (tmp_path / "calls.log").exists()
+
+
+def test_python_sanitizers_reject_the_same_bad_scanner_input():
+    from k8s_baseline_audit.collect.sanitize import SanitizeShapeError
+
+    bad = {
+        sanitize_kube_bench: [
+            {},
+            {"Controls": None},
+            {"Controls": [{"tests": [{"results": ["x"]}]}]},
+        ],
+        sanitize_kubescape: [
+            {"resources": []},
+            {"results": [], "resources": None},
+            {"results": {}},
+        ],
+        sanitize_trivy: [
+            {"ClusterName": "x"},
+            {"Resources": None},
+            {"Resources": [{"Results": [{"Secrets": ["x"]}]}]},
+        ],
+    }
+    for fn, docs in bad.items():
+        for doc in docs:
+            with pytest.raises((SanitizeShapeError, AttributeError, TypeError)):
+                fn(doc)
+
+
+def test_sanitized_scanner_files_drop_non_allowlisted_fields(env):
+    tmp_path, environ = env
+    b = load_bundle(full_run(tmp_path, environ))
+    trivy = b.read_json("scanners/trivy.json")
+    secrets = trivy["Resources"][0]["Results"][1]["Secrets"]
+    assert secrets[1]["Layer"] == {"Digest": "sha256:a", "DiffID": "sha256:b"}
+    assert secrets[2] == {"RuleID": "odd-layer"}
+    result = b.read_json("scanners/kube-bench-cp-1.json")["Controls"][0]["tests"][0]["results"][0]
+    assert sorted(result) == ["remediation", "scored", "status", "test_desc", "test_number", "type"]
+    for rel in ("scanners/trivy.json", "scanners/kube-bench-cp-1.json"):
+        assert SECRET not in json.dumps(b.read_json(rel))
+
+
+LEAKY_STDERR = "Error: --password=LEAK1 dial postgres://u:LEAK2@h:5432 x token='LEAK3 y'\n"
+
+
+def test_kubectl_stderr_is_redacted_like_python(env):
+    tmp_path, environ = env
+    environ.update(
+        {
+            "FAKE_STDERR": LEAKY_STDERR,
+            "FAKE_GET_FAIL": "pods,clusterroles",
+            "FAKE_CANI_FAIL": "roles",
+        }
+    )
+    script = script_bundle(tmp_path, environ)
+    assert "LEAK" not in json.dumps(script.errors)
+    assert {
+        "resource": "pods",
+        "reason": "kubectl exit 1: Error: --password=<redacted> dial "
+        "postgres://u:<redacted>@h:5432 x token=<redacted>",
+    } in script.errors
+    assert_same_as_python(script, python_bundle(tmp_path, environ))

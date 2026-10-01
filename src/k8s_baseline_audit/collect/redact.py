@@ -68,6 +68,18 @@ def _unquote_value(val: str) -> str:
     return val
 
 
+def _replace_embedded(match: re.Match) -> str:
+    unquoted = _unquote_value(match.group("val"))
+    if unquoted and not _is_safe_value(unquoted):
+        return f"{match.group('key')}={REDACTED}"
+    return match.group(0)
+
+
+def redact_text(text: str) -> str:
+    """Rules C and D on free text (argv elements, kubectl and scanner stderr)."""
+    return _RULE_D.sub(_replace_embedded, _RULE_C.sub(r"\g<pre><redacted>@", text))
+
+
 def redact_argv(argv: list) -> list:
     """Redact argv list following Rules A, B, C, D.
 
@@ -115,19 +127,8 @@ def redact_argv(argv: list) -> list:
                     i += 2
                     continue
 
-        # Rule C: URL credentials (applied to any string)
-        redacted = _RULE_C.sub(r"\g<pre><redacted>@", elem)
-
-        # Rule D: embedded key=value inside strings (applied after A/B/C)
-        def replace_embedded(match: re.Match) -> str:
-            key = match.group("key")
-            val = match.group("val")
-            unquoted = _unquote_value(val)
-            if unquoted and not _is_safe_value(unquoted):
-                return f"{key}={REDACTED}"
-            return match.group(0)
-
-        redacted = _RULE_D.sub(replace_embedded, redacted)
+        # Rules C and D: URL credentials, then embedded key=value pairs
+        redacted = redact_text(elem)
         result.append(redacted)
         i += 1
 

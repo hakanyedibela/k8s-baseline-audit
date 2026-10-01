@@ -244,3 +244,69 @@ def test_stale_file_not_overwritten_when_scanner_fails(tmp_path):
     )
     assert out.status["trivy"]["status"] == "failed"
     assert out.files == {}
+
+
+# --- I3 / M3 / M4 -------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("tool", "doc"),
+    [
+        ("trivy", {"ClusterName": "x"}),
+        ("trivy", {"Resources": None}),
+        ("kubescape", {"resources": []}),
+        ("kubescape", {"results": [], "resources": "x"}),
+    ],
+)
+def test_scanner_output_without_expected_lists_is_failure(tmp_path, tool, doc):
+    plan = ScannerPlan(kubescape=tool == "kubescape", trivy=tool == "trivy")
+    out = run_scanners(plan, None, tmp_path, which=installed, run=FakeRun({tool: doc}))
+    assert out.status[tool]["status"] == "failed"
+    assert out.status[tool]["error"] == "scanner output has unexpected shape"
+    assert out.files == {}
+
+
+def test_kube_bench_without_controls_list_raises(tmp_path):
+    kb = tmp_path / "kb.json"
+    kb.write_text(json.dumps({"Totals": {}}))
+    with pytest.raises(ValueError, match="kube-bench result has unexpected shape"):
+        run_scanners(
+            ScannerPlan(kubescape=False, trivy=False, kube_bench_results=(("n", kb),)),
+            None, tmp_path, which=installed, run=FakeRun({}),
+        )
+
+
+def test_duplicate_kube_bench_slug_raises(tmp_path):
+    kb = tmp_path / "kb.json"
+    kb.write_text(json.dumps({"Controls": []}))
+    with pytest.raises(ValueError, match="duplicate kube-bench node name: cp-1"):
+        run_scanners(
+            ScannerPlan(
+                kubescape=False, trivy=False, kube_bench_results=(("cp 1", kb), ("cp-1", kb))
+            ),
+            None, tmp_path, which=installed, run=FakeRun({}),
+        )
+
+
+LEAKY = "error: --password=LEAK1 failed for postgres://u:LEAK2@h/db\n"
+
+
+@pytest.mark.parametrize("phase", ["version", "scan"])
+def test_scanner_stderr_is_redacted(tmp_path, phase):
+    def run(argv, timeout):
+        if len(argv) <= 2:
+            return (1, "", LEAKY) if phase == "version" else (0, "trivy 1\n", "")
+        return 1, "", LEAKY
+
+    out = run_scanners(ScannerPlan(kubescape=False), None, tmp_path, which=installed, run=run)
+    error = out.status["trivy"]["error"]
+    assert "LEAK" not in error
+    assert error == "error: --password=<redacted> failed for postgres://u:<redacted>@h/db"
+
+
+def test_scanner_exception_text_is_redacted(tmp_path):
+    def run(argv, timeout):
+        raise RuntimeError("token=LEAK3")
+
+    out = run_scanners(ScannerPlan(kubescape=False), None, tmp_path, which=installed, run=run)
+    assert out.status["trivy"]["error"] == "token=<redacted>"

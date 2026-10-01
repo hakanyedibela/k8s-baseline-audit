@@ -11,6 +11,7 @@ from k8s_baseline_audit.collect.redact import (
     parse_secret_rows,
     redact_argv,
     redact_pod_list,
+    redact_text,
 )
 
 SECRET = "s3cr3t-value-123"
@@ -657,3 +658,18 @@ def test_redact_argv_v22_path_value_with_whitespace_fully_masked():
 )
 def test_redact_argv_v22_safe_values_survive(argv):
     assert redact_argv(argv) == argv
+
+
+@pytest.mark.parametrize(
+    ("text", "want"),
+    [
+        ("--password=LEAK x", "--password=<redacted> x"),
+        ("dial postgres://u:LEAK@h:5432/db", "dial postgres://u:<redacted>@h:5432/db"),
+        ("a token='LEAK b' c", "a token=<redacted> c"),
+        ("--token-auth-file=/etc/x --anonymous-auth=false",) * 2,
+        ("line1\nsecret=LEAK\nline3", "line1\nsecret=<redacted>\nline3"),
+        ("no secrets here", "no secrets here"),
+    ],
+)
+def test_redact_text_applies_rules_c_and_d(text, want):
+    assert redact_text(text) == want
