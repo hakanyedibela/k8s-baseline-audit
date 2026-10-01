@@ -135,7 +135,7 @@ Generated from a local throwaway kind cluster with a deliberately insecure pod, 
 - [examples/kind-demo/report.de.md](examples/kind-demo/report.de.md)
 - [examples/kind-demo/report.en.md](examples/kind-demo/report.en.md)
 
-Each report is 877 lines (933 findings in `findings.json`: 23 critical, 217 high, 408 medium, 285 low). Built-in checks get one section per check with a row per finding. Checks reported only by a scanner are summarized in one table, and image vulnerabilities are counted per image; `findings.json` keeps every single finding.
+Each report is 877 lines (933 findings in `findings.json`: 23 critical, 217 high, 408 medium, 285 low). Built-in checks get one section per check with a row per finding. Checks reported only by a scanner are summarized in one table, and image vulnerabilities are counted per scan target (image OS layer or binary); `findings.json` keeps every single finding.
 
 ## Coverage statuses
 

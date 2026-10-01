@@ -684,9 +684,9 @@ Checks reported only by a scanner, summarized per check. Every single finding is
 
 ## 3b. Image vulnerabilities
 
-Number of distinct vulnerability IDs per image and severity. The full list is in findings.json.
+Number of distinct vulnerability IDs per scan target (image OS layer or binary) and severity. The full list is in findings.json.
 
-| Image | Critical | High | Medium | Low | Workloads |
+| Scan target | Critical | High | Medium | Low | Workloads |
 |---|---|---|---|---|---|
 | `nginx:latest (debian 13.7)` | 1 | 28 | 68 | 76 | 1 |
 | `go-runner` | 1 | 19 | 9 | 1 | 1 |

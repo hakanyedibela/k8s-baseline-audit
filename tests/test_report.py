@@ -228,13 +228,13 @@ def test_vulnerabilities_are_counted_per_image(report_input, tmp_path):
     }
     inp = replace(report_input, findings=[*report_input.findings, *vulns], images=images)
     text = render_reports(inp, None, tmp_path / "a")["en"].read_text()
-    assert "| Image | Critical | High | Medium | Low | Workloads |" in text
+    assert "| Scan target | Critical | High | Medium | Low | Workloads |" in text
     assert "| `nginx:1 (debian 12)` | 1 | 1 | 0 | 0 | 2 |" in text
     assert "| `busybox:1` | 0 | 0 | 0 | 1 | 1 |" in text
     assert "| `?` | 0 | 0 | 1 | 0 | 0 |" in text
     assert "0123456789abcdef" not in text  # full list stays in findings.json
     de = render_reports(inp, None, tmp_path / "b")["de"].read_text()
-    assert "| Image | Kritisch | Hoch | Mittel | Niedrig | Workloads |" in de
+    assert "| Scan-Ziel | Kritisch | Hoch | Mittel | Niedrig | Workloads |" in de
 
 
 def test_vulnerability_images_are_read_from_the_bundle(tmp_path):
@@ -327,3 +327,13 @@ def test_hostile_scanner_titles_and_images_do_not_break_structure(report_input, 
     assert len(re.findall(r"^### ", bad, re.M)) == len(re.findall(r"^### ", good, re.M))
     assert len(re.findall(r"^\|", bad, re.M)) == len(re.findall(r"^\|", good, re.M))
     assert not re.search(r"^## Heading", bad, re.M)
+
+
+def test_vulnerability_table_is_labeled_by_scan_target_not_image():
+    from k8s_baseline_audit.report.labels import LABELS
+
+    assert LABELS["en"]["col_image"] == "Scan target"
+    assert LABELS["de"]["col_image"] == "Scan-Ziel"
+    assert "scan target" in LABELS["en"]["vulns_note"].lower()
+    assert "scan-ziel" in LABELS["de"]["vulns_note"].lower()
+    assert "per image" not in LABELS["en"]["vulns_note"]

@@ -684,9 +684,9 @@ Prüfungen, die nur ein Scanner meldet, zusammengefasst je Prüfung. Jeder einze
 
 ## 3b. Image-Schwachstellen
 
-Anzahl unterschiedlicher Schwachstellen-Kennungen je Image und Schweregrad. Die vollständige Liste steht in findings.json.
+Anzahl unterschiedlicher Schwachstellen-Kennungen je Scan-Ziel (Image-Betriebssystem oder Binärdatei) und Schweregrad. Die vollständige Liste steht in findings.json.
 
-| Image | Kritisch | Hoch | Mittel | Niedrig | Workloads |
+| Scan-Ziel | Kritisch | Hoch | Mittel | Niedrig | Workloads |
 |---|---|---|---|---|---|
 | `nginx:latest (debian 13.7)` | 1 | 28 | 68 | 76 | 1 |
 | `go-runner` | 1 | 19 | 9 | 1 | 1 |
