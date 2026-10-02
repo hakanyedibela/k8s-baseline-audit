@@ -24,7 +24,7 @@
 - Exit codes: `0` ok, `1` findings at or above `--fail-on` (default `high`), `2` errors.
 - BSI text is paraphrased, never copied. Only requirement IDs, levels and own paraphrases are committed. BSI PDFs are never committed.
 - `SKILL.md` frontmatter holds only `name` and `description`; the body names no agent-specific tools.
-- Commits go to the feature branch, never to `main` without the user's explicit go. Commit trailer: `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+- Commits go to the feature branch, never to `main` without the user's explicit go. No AI attribution trailers in commits.
 
 ## Review Focus
 
