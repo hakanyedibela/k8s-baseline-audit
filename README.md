@@ -47,12 +47,14 @@ Secrets are an optional second role in that file. The Kubernetes API has no perm
 ## Install
 
 ```sh
-pipx install git+https://github.com/hakanyedibela/k8s-baseline-audit
+pipx install git+https://github.com/hakanyedibela/k8s-baseline-audit@v0.1.0
 ```
+
+This installs the tagged release. Leave out `@v0.1.0` to install the development state of `main`.
 
 Requirements: Python 3.11+ and `kubectl`. Optional: `kubescape` and `trivy` (run by the collector unless you pass `--no-scanners`), and `jq` (only for the client export script).
 
-`pipx` installs the CLI only. `scripts/export-bundle.sh` and `scripts/install-skill.sh` are not part of the package; run them from a checkout of this repository (`git clone https://github.com/hakanyedibela/k8s-baseline-audit`).
+`pipx` installs the CLI only. `scripts/export-bundle.sh` and `scripts/install-skill.sh` are not part of the package; run them from a checkout of this repository (`git clone --branch v0.1.0 https://github.com/hakanyedibela/k8s-baseline-audit`).
 
 ## Quick start
 

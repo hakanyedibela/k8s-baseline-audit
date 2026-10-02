@@ -25,7 +25,7 @@ k8s-baseline-audit --version
 If it is missing, install it:
 
 ```sh
-pipx install git+https://github.com/hakanyedibela/k8s-baseline-audit
+pipx install git+https://github.com/hakanyedibela/k8s-baseline-audit@v0.1.0
 ```
 
 ## Step 1: Choose the mode
